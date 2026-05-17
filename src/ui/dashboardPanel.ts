@@ -1,28 +1,9 @@
 /**
- * ═══════════════════════════════════════════════════════════════════
- *  Dashboard Panel — Rich webview showing live system metrics
- * ═══════════════════════════════════════════════════════════════════
- *
- *  PURPOSE:
- *    Provides a rich webview panel inside VS Code that displays:
- *      - Live CPU, RAM, GPU, VRAM gauges with animations
- *      - Historical trend charts (last 60 samples)
- *      - Active alerts and leak warnings
- *      - Delta.X summary (dependency gap)
- *      - VRE container status
- *
- *  USED BY:
- *    - src/commands.ts  (vre.showDashboard command)
- *    - src/monitor/hardwareMonitor.ts  (sends sample updates)
- *
- *  COMMUNICATION:
- *    Uses postMessage to send metric updates from the extension
- *    to the webview. The webview renders updates in real-time
- *    using vanilla JS (no framework dependencies).
- * ═══════════════════════════════════════════════════════════════════
+ * Dashboard Panel — Production-grade webview with CSP + nonce security
  */
 
 import * as vscode from 'vscode';
+import * as crypto from 'crypto';
 import { MetricsSample } from '../monitor/metricsCollector';
 import { DeltaReport } from '../migrate/deltaEngine';
 
@@ -33,14 +14,12 @@ export class DashboardPanel {
 
     private constructor(panel: vscode.WebviewPanel) {
         this.panel = panel;
-
         this.panel.onDidDispose(() => {
             this.disposed = true;
             DashboardPanel.currentPanel = undefined;
         });
     }
 
-    /** Create or show the dashboard panel */
     static createOrShow(): DashboardPanel {
         if (DashboardPanel.currentPanel) {
             DashboardPanel.currentPanel.panel.reveal(vscode.ViewColumn.Beside);
@@ -51,548 +30,178 @@ export class DashboardPanel {
             'vreDashboard',
             'VRE Dashboard',
             vscode.ViewColumn.Beside,
-            {
-                enableScripts: true,
-                retainContextWhenHidden: true,
-            }
+            { enableScripts: true, retainContextWhenHidden: true }
         );
 
         DashboardPanel.currentPanel = new DashboardPanel(panel);
-        DashboardPanel.currentPanel.panel.webview.html = getDashboardHtml();
+        DashboardPanel.currentPanel.render();
         return DashboardPanel.currentPanel;
     }
 
-    /** Send a metrics update to the webview */
+    private render(): void {
+        const nonce = crypto.randomBytes(16).toString('hex');
+        this.panel.webview.html = getDashboardHtml(nonce, this.panel.webview);
+    }
+
     updateMetrics(sample: MetricsSample): void {
         if (this.disposed) { return; }
-        this.panel.webview.postMessage({
-            type: 'metrics',
-            data: sample,
-        });
+        this.panel.webview.postMessage({ type: 'metrics', data: sample });
     }
 
-    /** Send delta report to the webview */
     updateDelta(delta: DeltaReport): void {
         if (this.disposed) { return; }
-        this.panel.webview.postMessage({
-            type: 'delta',
-            data: delta,
-        });
+        this.panel.webview.postMessage({ type: 'delta', data: delta });
     }
 
-    /** Send an alert to the webview */
     sendAlert(message: string, severity: string): void {
         if (this.disposed) { return; }
+        // Sanitize message to prevent XSS
+        const safeMsg = message.replace(/</g, '&lt;').replace(/>/g, '&gt;');
         this.panel.webview.postMessage({
             type: 'alert',
-            data: { message, severity, timestamp: new Date().toISOString() },
+            data: { message: safeMsg, severity, timestamp: new Date().toISOString() },
         });
     }
 
-    dispose(): void {
-        this.panel.dispose();
-    }
+    dispose(): void { this.panel.dispose(); }
 }
 
-/** Generate the full dashboard HTML with embedded CSS and JS */
-function getDashboardHtml(): string {
+function getDashboardHtml(nonce: string, webview: vscode.Webview): string {
+    const csp = `default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource} data:;`;
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VRE Dashboard</title>
-    <style>
-        :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-tertiary: #21262d;
-            --border: #30363d;
-            --text-primary: #e6edf3;
-            --text-secondary: #8b949e;
-            --text-muted: #6e7681;
-            --accent-blue: #58a6ff;
-            --accent-green: #3fb950;
-            --accent-yellow: #d29922;
-            --accent-red: #f85149;
-            --accent-purple: #bc8cff;
-            --gradient-blue: linear-gradient(135deg, #1a73e8, #58a6ff);
-            --gradient-green: linear-gradient(135deg, #238636, #3fb950);
-            --gradient-red: linear-gradient(135deg, #da3633, #f85149);
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        body {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            padding: 20px;
-            line-height: 1.5;
-        }
-
-        .header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 24px;
-            padding-bottom: 16px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .header h1 {
-            font-size: 20px;
-            font-weight: 600;
-            background: var(--gradient-blue);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .header .badge {
-            font-size: 11px;
-            padding: 2px 8px;
-            border-radius: 12px;
-            background: var(--bg-tertiary);
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-        }
-
-        .header .badge.active {
-            background: rgba(63, 185, 80, 0.15);
-            color: var(--accent-green);
-            border-color: rgba(63, 185, 80, 0.3);
-        }
-
-        /* ──── Gauge Cards ──── */
-        .gauges {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .gauge-card {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .gauge-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: var(--gradient-blue);
-            opacity: 0.6;
-        }
-
-        .gauge-card.warn::before { background: var(--gradient-red); opacity: 0.8; }
-
-        .gauge-label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--text-secondary);
-            margin-bottom: 8px;
-        }
-
-        .gauge-value {
-            font-size: 32px;
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-        }
-
-        .gauge-sub {
-            font-size: 13px;
-            color: var(--text-muted);
-            margin-top: 4px;
-        }
-
-        .gauge-bar {
-            margin-top: 12px;
-            height: 6px;
-            background: var(--bg-tertiary);
-            border-radius: 3px;
-            overflow: hidden;
-        }
-
-        .gauge-bar-fill {
-            height: 100%;
-            border-radius: 3px;
-            background: var(--accent-blue);
-            transition: width 0.5s ease, background 0.3s ease;
-        }
-
-        .gauge-bar-fill.high { background: var(--accent-yellow); }
-        .gauge-bar-fill.critical { background: var(--accent-red); }
-
-        /* ──── History Chart ──── */
-        .chart-section {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 24px;
-        }
-
-        .chart-section h2 {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .chart-container {
-            width: 100%;
-            height: 120px;
-            position: relative;
-        }
-
-        canvas { width: 100%; height: 100%; }
-
-        .chart-legend {
-            display: flex;
-            gap: 16px;
-            margin-top: 12px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-
-        .legend-item { display: flex; align-items: center; gap: 6px; }
-        .legend-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-        }
-
-        /* ──── Alerts ──── */
-        .alerts-section {
-            margin-bottom: 24px;
-        }
-
-        .alert-item {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-left: 3px solid var(--accent-yellow);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin-bottom: 8px;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            animation: slideIn 0.3s ease;
-        }
-
-        .alert-item.critical { border-left-color: var(--accent-red); }
-
-        .alert-time {
-            color: var(--text-muted);
-            font-size: 11px;
-            white-space: nowrap;
-        }
-
-        /* ──── Delta Summary ──── */
-        .delta-section {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-        }
-
-        .delta-section h2 {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .delta-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 12px;
-        }
-
-        .delta-stat {
-            text-align: center;
-            padding: 12px;
-            border-radius: 8px;
-            background: var(--bg-tertiary);
-        }
-
-        .delta-stat .number {
-            font-size: 28px;
-            font-weight: 700;
-        }
-
-        .delta-stat .label {
-            font-size: 11px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-        }
-
-        .delta-stat.good .number { color: var(--accent-green); }
-        .delta-stat.bad .number { color: var(--accent-red); }
-        .delta-stat.warn .number { color: var(--accent-yellow); }
-
-        /* ──── Processes ──── */
-        .process-list {
-            margin-top: 16px;
-        }
-
-        .process-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 6px 0;
-            font-size: 12px;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--bg-tertiary);
-        }
-
-        .process-item .name { color: var(--text-primary); }
-
-        @keyframes slideIn {
-            from { opacity: 0; transform: translateX(-10px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
-            font-size: 14px;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="${csp}">
+<title>VRE Dashboard</title>
+<style nonce="${nonce}">
+:root{--bg0:#0d1117;--bg1:#161b22;--bg2:#21262d;--bd:#30363d;--t1:#e6edf3;--t2:#8b949e;--t3:#6e7681;--blue:#58a6ff;--green:#3fb950;--yellow:#d29922;--red:#f85149;--purple:#bc8cff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg0);color:var(--t1);font-family:'Segoe UI',-apple-system,BlinkMacSystemFont,sans-serif;padding:20px;line-height:1.5}
+.hdr{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid var(--bd)}
+.hdr h1{font-size:20px;font-weight:600;background:linear-gradient(135deg,#1a73e8,#58a6ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.badge{font-size:11px;padding:2px 8px;border-radius:12px;background:var(--bg2);color:var(--t2);border:1px solid var(--bd)}
+.badge.active{background:rgba(63,185,80,.15);color:var(--green);border-color:rgba(63,185,80,.3)}
+.gauges{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.gc{background:var(--bg1);border:1px solid var(--bd);border-radius:12px;padding:20px;position:relative;overflow:hidden;transition:box-shadow .3s}
+.gc:hover{box-shadow:0 0 20px rgba(88,166,255,.08)}
+.gc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(135deg,#1a73e8,#58a6ff);opacity:.6;transition:opacity .3s}
+.gc.warn::before{background:linear-gradient(135deg,#da3633,#f85149);opacity:.8}
+.gl{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--t2);margin-bottom:8px}
+.gv{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums;transition:color .3s}
+.gs{font-size:13px;color:var(--t3);margin-top:4px}
+.gb{margin-top:12px;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden}
+.gf{height:100%;border-radius:3px;background:var(--blue);transition:width .5s ease,background .3s}
+.gf.high{background:var(--yellow)}.gf.crit{background:var(--red)}
+.sec{background:var(--bg1);border:1px solid var(--bd);border-radius:12px;padding:20px;margin-bottom:24px}
+.sec h2{font-size:14px;color:var(--t2);margin-bottom:16px;text-transform:uppercase;letter-spacing:1px}
+.cc{width:100%;height:140px;position:relative}
+canvas{width:100%;height:100%}
+.lg{display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--t2)}
+.li{display:flex;align-items:center;gap:6px}
+.ld{width:8px;height:8px;border-radius:50%}
+.ai{background:var(--bg1);border:1px solid var(--bd);border-left:3px solid var(--yellow);border-radius:8px;padding:12px 16px;margin-bottom:8px;font-size:13px;display:flex;align-items:center;gap:8px;animation:si .3s ease}
+.ai.crit{border-left-color:var(--red)}
+.at{color:var(--t3);font-size:11px;white-space:nowrap}
+.dg{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.ds{text-align:center;padding:12px;border-radius:8px;background:var(--bg2);transition:transform .2s}
+.ds:hover{transform:scale(1.05)}
+.ds .n{font-size:28px;font-weight:700}
+.ds .l{font-size:11px;color:var(--t2);text-transform:uppercase}
+.ds.good .n{color:var(--green)}.ds.bad .n{color:var(--red)}.ds.warn .n{color:var(--yellow)}
+.pi{display:flex;justify-content:space-between;padding:8px 0;font-size:12px;color:var(--t2);border-bottom:1px solid var(--bg2)}
+.pi .pn{color:var(--t1);font-weight:500}
+.pi .pb{height:4px;flex:1;margin:0 12px;background:var(--bg2);border-radius:2px;overflow:hidden;align-self:center}
+.pi .pf{height:100%;background:var(--blue);border-radius:2px;transition:width .5s}
+.es{text-align:center;padding:40px;color:var(--t3);font-size:14px}
+.ver{text-align:center;margin-top:24px;font-size:11px;color:var(--t3);padding-top:16px;border-top:1px solid var(--bg2)}
+@keyframes si{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+</style>
 </head>
 <body>
-    <div class="header">
-        <h1>⚡ VRE + Around</h1>
-        <span class="badge" id="monitorBadge">Monitor: Idle</span>
-    </div>
+<div class="hdr"><h1>⚡ VRE + Around</h1><span class="badge" id="mb">Monitor: Idle</span><span class="badge" id="vb">v1.0.0</span></div>
+<div class="gauges">
+<div class="gc" id="cc"><div class="gl">CPU Usage</div><div class="gv" id="cv">--%</div><div class="gs" id="cs">Waiting for data...</div><div class="gb"><div class="gf" id="cb" style="width:0%"></div></div></div>
+<div class="gc" id="rc"><div class="gl">RAM Usage</div><div class="gv" id="rv">-- GB</div><div class="gs" id="rs">-- / -- GB</div><div class="gb"><div class="gf" id="rb" style="width:0%"></div></div></div>
+<div class="gc" id="gc2"><div class="gl">GPU Usage</div><div class="gv" id="gv2">N/A</div><div class="gs" id="gs2">No GPU detected</div><div class="gb"><div class="gf" id="gb2" style="width:0%"></div></div></div>
+<div class="gc" id="vc"><div class="gl">VRAM Usage</div><div class="gv" id="vv">N/A</div><div class="gs" id="vs">--</div><div class="gb"><div class="gf" id="vb2" style="width:0%"></div></div></div>
+</div>
+<div class="sec"><h2>Resource History (Last 60 Samples)</h2><div class="cc"><canvas id="hc"></canvas></div>
+<div class="lg"><div class="li"><div class="ld" style="background:#58a6ff"></div>CPU</div><div class="li"><div class="ld" style="background:#3fb950"></div>RAM</div><div class="li"><div class="ld" style="background:#bc8cff"></div>GPU</div><div class="li"><div class="ld" style="background:#f85149"></div>VRAM</div></div></div>
+<div id="as" style="display:none"><div class="sec"><h2>⚠️ Active Alerts</h2><div id="al"></div></div></div>
+<div class="sec" id="dd"><h2>📦 Dependency Delta</h2><div class="dg" id="dg"><div class="es" style="grid-column:1/-1">Run "VRE: Scan Dependencies" to see environment gap</div></div></div>
+<div class="sec"><h2>Top Processes</h2><div id="pl"><div class="es">Waiting for monitor data...</div></div></div>
+<div class="ver">VRE + Around Extension — Environment-Aware AI Coding</div>
 
-    <!-- Gauge Cards -->
-    <div class="gauges">
-        <div class="gauge-card" id="cpuCard">
-            <div class="gauge-label">CPU Usage</div>
-            <div class="gauge-value" id="cpuValue">--%</div>
-            <div class="gauge-sub" id="cpuSub">Waiting for data...</div>
-            <div class="gauge-bar"><div class="gauge-bar-fill" id="cpuBar" style="width:0%"></div></div>
-        </div>
-        <div class="gauge-card" id="ramCard">
-            <div class="gauge-label">RAM Usage</div>
-            <div class="gauge-value" id="ramValue">-- GB</div>
-            <div class="gauge-sub" id="ramSub">-- / -- GB</div>
-            <div class="gauge-bar"><div class="gauge-bar-fill" id="ramBar" style="width:0%"></div></div>
-        </div>
-        <div class="gauge-card" id="gpuCard">
-            <div class="gauge-label">GPU Usage</div>
-            <div class="gauge-value" id="gpuValue">N/A</div>
-            <div class="gauge-sub" id="gpuSub">No GPU detected</div>
-            <div class="gauge-bar"><div class="gauge-bar-fill" id="gpuBar" style="width:0%"></div></div>
-        </div>
-        <div class="gauge-card" id="vramCard">
-            <div class="gauge-label">VRAM Usage</div>
-            <div class="gauge-value" id="vramValue">N/A</div>
-            <div class="gauge-sub" id="vramSub">--</div>
-            <div class="gauge-bar"><div class="gauge-bar-fill" id="vramBar" style="width:0%"></div></div>
-        </div>
-    </div>
+<script nonce="${nonce}">
+(function(){
+const api=acquireVsCodeApi();
+const H={cpu:[],ram:[],gpu:[],vram:[]},MH=60;
+function $(id){return document.getElementById(id)}
+function bar(id,p){const b=$(id);if(!b)return;b.style.width=Math.min(p,100)+'%';b.className='gf';if(p>90)b.classList.add('crit');else if(p>70)b.classList.add('high')}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
 
-    <!-- History Chart -->
-    <div class="chart-section">
-        <h2>Resource History (Last 60 Samples)</h2>
-        <div class="chart-container">
-            <canvas id="historyChart"></canvas>
-        </div>
-        <div class="chart-legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#58a6ff"></div>CPU</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#3fb950"></div>RAM</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#bc8cff"></div>GPU</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#f85149"></div>VRAM</div>
-        </div>
-    </div>
+window.addEventListener('message',function(e){
+const m=e.data;
+if(m.type==='metrics'){
+const d=m.data;
+$('cv').textContent=d.cpuPercent+'%';bar('cb',d.cpuPercent);
+if(d.cpuPercent>90)$('cc').classList.add('warn');else $('cc').classList.remove('warn');
+$('rv').textContent=d.ramUsedGb+' GB';$('rs').textContent=d.ramUsedGb+' / '+d.ramTotalGb+' GB';
+const rp=Math.round((d.ramUsedGb/d.ramTotalGb)*100);bar('rb',rp);
+if(rp>85)$('rc').classList.add('warn');else $('rc').classList.remove('warn');
+if(d.gpuPercent!==null){$('gv2').textContent=d.gpuPercent+'%';$('gs2').textContent='Active';bar('gb2',d.gpuPercent)}
+if(d.vramUsedGb!==null&&d.vramTotalGb!==null){
+$('vv').textContent=d.vramUsedGb+' GB';$('vs').textContent=d.vramUsedGb+' / '+d.vramTotalGb+' GB';
+const vp=Math.round((d.vramUsedGb/d.vramTotalGb)*100);bar('vb2',vp);
+if(vp>90)$('vc').classList.add('warn');else $('vc').classList.remove('warn');
+}
+H.cpu.push(d.cpuPercent);H.ram.push(rp);H.gpu.push(d.gpuPercent||0);
+H.vram.push(d.vramUsedGb&&d.vramTotalGb?Math.round((d.vramUsedGb/d.vramTotalGb)*100):0);
+for(const k of Object.keys(H)){if(H[k].length>MH)H[k].shift()}
+drawChart();
+if(d.topProcesses&&d.topProcesses.length){
+$('pl').innerHTML=d.topProcesses.map(function(p){
+const w=Math.min(p.cpu,100);
+return '<div class="pi"><span class="pn">'+esc(p.name)+'</span><div class="pb"><div class="pf" style="width:'+w+'%"></div></div><span>CPU:'+p.cpu+'% | '+p.memory+'MB</span></div>';
+}).join('');
+}
+$('mb').textContent='Monitor: Active';$('mb').classList.add('active');
+}
+if(m.type==='delta'){
+const d=m.data;
+$('dg').innerHTML='<div class="ds good"><div class="n">'+d.satisfied.length+'</div><div class="l">Satisfied</div></div>'
++'<div class="ds bad"><div class="n">'+d.missing.length+'</div><div class="l">Missing</div></div>'
++'<div class="ds warn"><div class="n">'+d.mismatched.length+'</div><div class="l">Mismatched</div></div>';
+}
+if(m.type==='alert'){
+$('as').style.display='block';
+const l=$('al'),cls=m.data.severity==='critical'?'ai crit':'ai';
+const div=document.createElement('div');div.className=cls;
+div.innerHTML='<span class="at">'+new Date(m.data.timestamp).toLocaleTimeString()+'</span>'+esc(m.data.message);
+l.insertBefore(div,l.firstChild);
+while(l.children.length>10)l.removeChild(l.lastChild);
+}
+});
 
-    <!-- Alerts -->
-    <div class="alerts-section" id="alertsSection" style="display:none">
-        <div class="chart-section">
-            <h2>⚠️ Active Alerts</h2>
-            <div id="alertsList"></div>
-        </div>
-    </div>
-
-    <!-- Delta Summary -->
-    <div class="delta-section" id="deltaSection">
-        <h2>📦 Dependency Delta</h2>
-        <div class="delta-grid" id="deltaGrid">
-            <div class="empty-state" style="grid-column: 1/-1">
-                Run "VRE: Scan Dependencies" to see environment gap
-            </div>
-        </div>
-    </div>
-
-    <!-- Top Processes -->
-    <div class="chart-section" style="margin-top:16px">
-        <h2>Top Processes</h2>
-        <div class="process-list" id="processList">
-            <div class="empty-state">Waiting for monitor data...</div>
-        </div>
-    </div>
-
-    <script>
-        const vscode = acquireVsCodeApi();
-
-        // History data for chart
-        const history = { cpu: [], ram: [], gpu: [], vram: [] };
-        const MAX_HISTORY = 60;
-
-        // Listen for messages from the extension
-        window.addEventListener('message', event => {
-            const msg = event.data;
-
-            if (msg.type === 'metrics') {
-                updateGauges(msg.data);
-                updateHistory(msg.data);
-                drawChart();
-                updateProcessList(msg.data.topProcesses || []);
-
-                document.getElementById('monitorBadge').textContent = 'Monitor: Active';
-                document.getElementById('monitorBadge').classList.add('active');
-            }
-
-            if (msg.type === 'delta') {
-                updateDelta(msg.data);
-            }
-
-            if (msg.type === 'alert') {
-                addAlert(msg.data);
-            }
-        });
-
-        function updateGauges(data) {
-            // CPU
-            setGauge('cpu', data.cpuPercent, '%', '');
-            // RAM
-            const ramPct = Math.round((data.ramUsedGb / data.ramTotalGb) * 100);
-            document.getElementById('ramValue').textContent = data.ramUsedGb + ' GB';
-            document.getElementById('ramSub').textContent = data.ramUsedGb + ' / ' + data.ramTotalGb + ' GB';
-            setBar('ramBar', ramPct);
-            if (ramPct > 85) document.getElementById('ramCard').classList.add('warn');
-            else document.getElementById('ramCard').classList.remove('warn');
-            // GPU
-            if (data.gpuPercent !== null) {
-                setGauge('gpu', data.gpuPercent, '%', '');
-            }
-            // VRAM
-            if (data.vramUsedGb !== null && data.vramTotalGb !== null) {
-                const vramPct = Math.round((data.vramUsedGb / data.vramTotalGb) * 100);
-                document.getElementById('vramValue').textContent = data.vramUsedGb + ' GB';
-                document.getElementById('vramSub').textContent = data.vramUsedGb + ' / ' + data.vramTotalGb + ' GB';
-                setBar('vramBar', vramPct);
-                if (vramPct > 90) document.getElementById('vramCard').classList.add('warn');
-            }
-        }
-
-        function setGauge(id, value, suffix) {
-            document.getElementById(id + 'Value').textContent = value + suffix;
-            setBar(id + 'Bar', value);
-        }
-
-        function setBar(id, pct) {
-            const bar = document.getElementById(id);
-            bar.style.width = Math.min(pct, 100) + '%';
-            bar.className = 'gauge-bar-fill';
-            if (pct > 90) bar.classList.add('critical');
-            else if (pct > 70) bar.classList.add('high');
-        }
-
-        function updateHistory(data) {
-            history.cpu.push(data.cpuPercent);
-            history.ram.push(Math.round((data.ramUsedGb / data.ramTotalGb) * 100));
-            history.gpu.push(data.gpuPercent || 0);
-            history.vram.push(
-                data.vramUsedGb && data.vramTotalGb
-                    ? Math.round((data.vramUsedGb / data.vramTotalGb) * 100)
-                    : 0
-            );
-            // Trim
-            for (const key of Object.keys(history)) {
-                if (history[key].length > MAX_HISTORY) history[key].shift();
-            }
-        }
-
-        function drawChart() {
-            const canvas = document.getElementById('historyChart');
-            const ctx = canvas.getContext('2d');
-            const w = canvas.offsetWidth;
-            const h = canvas.offsetHeight;
-            canvas.width = w * 2; canvas.height = h * 2;
-            ctx.scale(2, 2);
-
-            ctx.clearRect(0, 0, w, h);
-
-            // Grid
-            ctx.strokeStyle = 'rgba(48, 54, 61, 0.5)';
-            ctx.lineWidth = 1;
-            for (let y = 0; y <= 100; y += 25) {
-                const py = h - (y / 100) * h;
-                ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(w, py); ctx.stroke();
-            }
-
-            const colors = { cpu: '#58a6ff', ram: '#3fb950', gpu: '#bc8cff', vram: '#f85149' };
-            for (const [key, color] of Object.entries(colors)) {
-                const data = history[key];
-                if (data.length < 2) continue;
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 1.5;
-                ctx.beginPath();
-                for (let i = 0; i < data.length; i++) {
-                    const x = (i / (MAX_HISTORY - 1)) * w;
-                    const y = h - (data[i] / 100) * h;
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-            }
-        }
-
-        function updateDelta(delta) {
-            const grid = document.getElementById('deltaGrid');
-            grid.innerHTML = [
-                '<div class="delta-stat good"><div class="number">' + delta.satisfied.length + '</div><div class="label">Satisfied</div></div>',
-                '<div class="delta-stat bad"><div class="number">' + delta.missing.length + '</div><div class="label">Missing</div></div>',
-                '<div class="delta-stat warn"><div class="number">' + delta.mismatched.length + '</div><div class="label">Mismatched</div></div>',
-            ].join('');
-        }
-
-        function addAlert(data) {
-            const section = document.getElementById('alertsSection');
-            section.style.display = 'block';
-            const list = document.getElementById('alertsList');
-            const cls = data.severity === 'critical' ? 'alert-item critical' : 'alert-item';
-            const html = '<div class="' + cls + '"><span class="alert-time">' +
-                new Date(data.timestamp).toLocaleTimeString() +
-                '</span>' + data.message + '</div>';
-            list.insertAdjacentHTML('afterbegin', html);
-            // Keep only last 10 alerts
-            while (list.children.length > 10) list.removeChild(list.lastChild);
-        }
-
-        function updateProcessList(processes) {
-            const list = document.getElementById('processList');
-            if (!processes.length) return;
-            list.innerHTML = processes.map(p =>
-                '<div class="process-item"><span class="name">' + p.name +
-                '</span><span>CPU: ' + p.cpu + '% | Mem: ' + p.memory + 'MB</span></div>'
-            ).join('');
-        }
-    </script>
+function drawChart(){
+const c=$('hc');if(!c)return;const ctx=c.getContext('2d');
+const w=c.offsetWidth,h=c.offsetHeight;c.width=w*2;c.height=h*2;ctx.scale(2,2);
+ctx.clearRect(0,0,w,h);
+ctx.strokeStyle='rgba(48,54,61,.5)';ctx.lineWidth=1;
+for(let y=0;y<=100;y+=25){const py=h-(y/100)*h;ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(w,py);ctx.stroke()}
+const colors={cpu:'#58a6ff',ram:'#3fb950',gpu:'#bc8cff',vram:'#f85149'};
+for(const[k,col]of Object.entries(colors)){
+const d=H[k];if(d.length<2)continue;
+ctx.strokeStyle=col;ctx.lineWidth=1.5;ctx.beginPath();
+for(let i=0;i<d.length;i++){const x=(i/(MH-1))*w,y=h-(d[i]/100)*h;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}
+ctx.stroke();
+}
+}
+})();
+</script>
 </body>
 </html>`;
 }
