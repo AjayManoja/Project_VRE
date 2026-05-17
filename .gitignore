@@ -1,0 +1,8 @@
+node_modules/
+out/
+*.vsix
+.monitor/
+.VRE/
+.migrate/
+VRE_Around_AI_Code_Editor_Extension.md
+VRE_Around_AI_Code_Editor_Extension.pdf

@@ -1,0 +1,140 @@
+{
+  "name": "vre-around",
+  "displayName": "VRE + Around — AI Code Environment",
+  "description": "Makes your AI code editor aware of your actual machine and target machine — catching real bugs locally before expensive remote compute is spent.",
+  "version": "0.1.0",
+  "publisher": "vre-around",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning",
+    "Testing"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vre.initialize",
+        "title": "VRE: Initialize Project Environment",
+        "icon": "$(rocket)"
+      },
+      {
+        "command": "vre.scanDependencies",
+        "title": "VRE: Scan Dependencies & Compute Delta"
+      },
+      {
+        "command": "vre.startMonitor",
+        "title": "VRE: Start Hardware Monitor"
+      },
+      {
+        "command": "vre.stopMonitor",
+        "title": "VRE: Stop Hardware Monitor"
+      },
+      {
+        "command": "vre.showDashboard",
+        "title": "VRE: Open Dashboard",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "vre.translateAndRun",
+        "title": "VRE: Translate & Run Proxy"
+      },
+      {
+        "command": "vre.viewDelta",
+        "title": "VRE: View Delta.X Report"
+      },
+      {
+        "command": "vre.refreshTree",
+        "title": "VRE: Refresh Explorer",
+        "icon": "$(refresh)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vre-explorer",
+          "title": "VRE Environment",
+          "icon": "$(server-environment)"
+        }
+      ]
+    },
+    "views": {
+      "vre-explorer": [
+        {
+          "id": "vreTreeView",
+          "name": "Environment Layers"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vre.refreshTree",
+          "when": "view == vreTreeView",
+          "group": "navigation"
+        },
+        {
+          "command": "vre.showDashboard",
+          "when": "view == vreTreeView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VRE + Around",
+      "properties": {
+        "vre.container.cpuCores": {
+          "type": "number",
+          "default": 1,
+          "description": "Max CPU cores for the VRE container."
+        },
+        "vre.container.ramLimitGb": {
+          "type": "number",
+          "default": 4,
+          "description": "Max RAM (GB) for the VRE container."
+        },
+        "vre.container.vramLimitGb": {
+          "type": "number",
+          "default": 2,
+          "description": "Max VRAM (GB) for the VRE container."
+        },
+        "vre.container.maxRuntimeMinutes": {
+          "type": "number",
+          "default": 30,
+          "description": "Max runtime (minutes) before auto-teardown."
+        },
+        "vre.monitor.intervalSeconds": {
+          "type": "number",
+          "default": 5,
+          "description": "Hardware monitor polling interval in seconds."
+        },
+        "vre.monitor.leakThresholdMb": {
+          "type": "number",
+          "default": 100,
+          "description": "RAM growth per interval (MB) to trigger leak warning."
+        },
+        "vre.monitor.vramAlertPercent": {
+          "type": "number",
+          "default": 90,
+          "description": "VRAM usage percentage to trigger alert."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
