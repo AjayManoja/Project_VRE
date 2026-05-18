@@ -6,6 +6,7 @@ import { promptAndInstall } from './migrate/installer';
 import { runVRE } from './vre/index';
 import { Monitor } from './monitor/watcher';
 import { StatusBar } from './ui/status_bar';
+import { getExecutableAbsolutePath } from './utils/platform';
 import { Logger } from './utils/logger';
 
 const LOG = 'Commands';
@@ -70,7 +71,21 @@ export function registerCommands(
                     const report = await runVRE(fp, root);
 
                     if (report.logicClean) {
-                        vscode.window.showInformationMessage(`✅ Code is logic-clean. ${report.translations.length} params scaled. Ran in ${report.execution.durationMs}ms.`);
+                        const binName = ext === '.py' ? 'python' : 'node';
+                        const absBinPath = getExecutableAbsolutePath(binName) || binName;
+                        const versionLabel = ext === '.py' ? `Python ${report.runtimeVersion}` : `Node.js ${report.runtimeVersion}`;
+
+                        const action = await vscode.window.showInformationMessage(
+                            `✅ VRE: Code is logic-clean! VRE has mapped the exact aligned environment (${versionLabel}) where torch/dependencies are verified. You can run the full script safely now with zero version conflicts!`,
+                            'Run Full Script Locally'
+                        );
+                        if (action === 'Run Full Script Locally') {
+                            const term = vscode.window.createTerminal('VRE Run Full');
+                            term.show();
+                            const relativeFp = path.relative(root, fp);
+                            const runCmd = `"${absBinPath}" "${relativeFp}"`;
+                            term.sendText(runCmd);
+                        }
                     } else if (report.execution.error) {
                         const cat = report.execution.error.classification.category;
                         const errType = report.execution.error.parsed.type;

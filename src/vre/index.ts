@@ -9,7 +9,7 @@ import { translate, addHeader, HEADER_LINES, Translation } from './translator';
 import { SoftContainer, ContainerResult } from './container';
 import { Delta } from '../migrate/delta';
 import { Logger } from '../utils/logger';
-import { getHardware } from '../utils/platform';
+import { getHardware, binaryVersion } from '../utils/platform';
 import { getGeminiKey, optimizeWithGemini, generateCrashDiagnosis } from '../utils/ai';
 
 const LOG = 'VRE';
@@ -21,6 +21,7 @@ export interface VREReport {
     execution: ContainerResult;
     originalLine: number | null;
     logicClean: boolean;
+    runtimeVersion: string;
 }
 
 function readDelta(root: string): Delta | null {
@@ -139,6 +140,8 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
         log.info(LOG, `Code is logic-clean. Ran in ${result.durationMs}ms`);
     }
 
+    const runtimeVersion = binaryVersion(lang === 'python' ? 'python' : 'node') || 'unknown';
+
     return {
         sourceFile: path.basename(sourceFile),
         proxyFile: proxyName,
@@ -146,6 +149,7 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
         execution: result,
         originalLine,
         logicClean: result.success,
+        runtimeVersion,
     };
 }
 

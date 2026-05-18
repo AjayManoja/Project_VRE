@@ -125,3 +125,10 @@ export function binaryExists(name: string): boolean {
     const cmd = getOS() === 'windows' ? `where ${name}` : `which ${name}`;
     return execSafe(cmd) !== null;
 }
+
+export function getExecutableAbsolutePath(name: string): string | null {
+    const cmd = getOS() === 'windows' ? `where ${name}` : `which ${name}`;
+    const res = execSafe(cmd);
+    if (!res) return null;
+    return res.split('\r\n')[0].split('\n')[0].trim();
+}
