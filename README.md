@@ -36,15 +36,20 @@ It executes the code with strict environment overrides and performs a guaranteed
 
 **`.monitor`** watches hardware metrics in real-time. If a crash or leak occurs, the Gemini AI Orchestrator ingests the traceback, stack, and hardware logs to output an **AI-ready, high-precision self-healing instruction report** (`vre.crash.report`) for your chat assistant.
 
+**`Editor Workspace Pre-Alignment`** automatically updates your `.vscode/settings.json` to point directly to the exact verified active runtime interpreter on your machine. This eliminates all editor-level static analysis (Pylance) resolution errors automatically.
+
+**`Unified 1-Click Execution`** allows you to trigger a full local execution directly once VRE confirms logic is clean. It maps the exact verified absolute interpreter path (e.g. `"C:\Program Files\Python311\python.exe"`) to launch the full, un-scaled script inside a fresh integrated terminal safely with zero version conflicts.
+
 ## Quick Start
 
 1. Create a `.env` file in your project root with your Gemini API Key:
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
    ```
-2. Open a project — `.migrate` scans automatically, auto-generates manifests if missing, and writes delta.X.
+2. Open a project — `.migrate` scans automatically, auto-generates manifests if missing, and writes delta.X. It also aligns your editor's `settings.json` path.
 3. Press `Ctrl+Shift+R` on a `.py` or `.js` file — VRE translates, caps training loops dynamically via Gemini, runs inside the sandbox, and opens the real-time log.
-4. If a crash occurs, copy the Gemini-enriched report in `.VRE/` and paste it into your AI assistant for a one-shot fix.
+4. If the code is logic-clean, click **`Run Full Script Locally`** to run the full training run safely using the aligned environment without version conflicts!
+5. If a crash occurs, copy the Gemini-enriched report in `.VRE/` and paste it into your AI assistant for a one-shot fix.
 
 ## Keyboard Shortcuts
 

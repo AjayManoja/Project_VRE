@@ -17,6 +17,8 @@ Every interaction between you and VRE, explained step by step.
 
 **You see:** A small notification. You can click "View delta.X" or ignore it. Either way, delta.X is ready.
 
+6. **Workspace Pre-Alignment:** VRE auto-generates `.vscode/settings.json` in your workspace pointing `python.defaultInterpreterPath` to the exact pre-verified absolute binary path. This resolves any editor static analysis conflicts (Pylance missing imports) instantly.
+
 **What delta.X looks like:**
 ```
 === VRE delta.X — Environment Gap Report ===
@@ -76,11 +78,13 @@ Paste this into any AI chat. One paste. The AI knows everything.
 5. **Runs the proxy** with real-time logs. The `VRE + Around` Output channel instantly reveals itself, showing your print statements, downloads, and progress bar in real-time.
 
 6. **Classifies the result:**
-   - **Success:** ✅ Code is logic-clean. 
+   - **Success:** ✅ Code is logic-clean. Shows a success dialog: `"VRE: Code is logic-clean! VRE has mapped the exact aligned environment where dependencies are verified. You can run the full script safely now with zero version conflicts!"`
    - **Category 2 (logic bug):** 🚨 Logic bug detected. Gemini outputs high-precision line mappings to the original file.
    - **Category 1 (hardware limit):** ⚠️ Hardware limit. Gemini outputs a self-healing crash report instructing your chat assistant how to optimize.
 
-7. **Cleans up (try...finally guarantee):** Deletes the temporary directories completely, reclaiming all local storage even if the script crashed or was cancelled mid-run.
+7. **Unified 1-Click Local Execution:** If the result is a success, Arjun can click **`Run Full Script Locally`**. VRE spawns an integrated terminal and executes the original script using the absolute verified path to the satisfied interpreter (e.g. `"C:\Program Files\Python311\python.exe"`), completely bypassing any shell-level PATH mismatches or version conflicts!
+
+8. **Cleans up (try...finally guarantee):** Deletes the temporary directories completely, reclaiming all local storage even if the script crashed or was cancelled mid-run.
 
 ---
 

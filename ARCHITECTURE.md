@@ -22,18 +22,23 @@ User presses Ctrl+Shift+R                     │
        └── Injects Dynamic Step-Capping (Early Loop Exits)
        │
        ▼
-   proxy runs inside container ─────────> .monitor watches
-       │                                      │
-       ├── Real-time process logging          │
-       ├── exit 0 → "logic clean"              │
-       ├── Cat 2 → "real bug"                 │
-       └── Cat 1 → "hardware limit"     leak detection
-                                              │
-                                              ▼
-                                     Gemini-Enriched AI Report
-       │
-       ▼
-   container cleans up (try...finally guarantee)
+    proxy runs inside container ─────────> .monitor watches
+        │                                      │
+        ├── Real-time process logging          │
+        ├── exit 0 → "logic clean"              │
+        ├── Cat 2 → "real bug"                 │
+        └── Cat 1 → "hardware limit"     leak detection
+                                               │
+                                               ▼
+                                      Gemini-Enriched AI Report
+        │
+        ▼
+    1-Click Unified Local Execution
+        ├── Absolute verified binary path mapping
+        └── Mismatch-free terminal execution
+        │
+        ▼
+    container cleans up (try...finally guarantee)
 ```
 
 ## Layer 1: .migrate
@@ -45,9 +50,9 @@ Reads dependency manifests. Scans the system. Compares. Writes delta.X.
 - `src/migrate/system.ts` — queries 26+ binaries, pip/npm package lists, hardware
 - `src/migrate/delta.ts` — semver comparison, delta.X report formatting
 - `src/migrate/installer.ts` — installs missing pip/npm packages with user permission
-- `src/migrate/index.ts` — orchestrator (scan project → scan system → compute delta → write files)
+- `src/migrate/index.ts` — orchestrator (scan project → scan system → compute delta → write files → auto-align VS Code settings)
 
-**Key behavior:** Runs automatically on project open. No user action needed. delta.X is produced before the user does anything.
+**Key behavior:** Runs automatically on project open. No user action needed. delta.X is produced before the user does anything. It dynamically aligning VS Code's editor environment path with `.vscode/settings.json` pointing to the exact machine binary found.
 
 ## Layer 2: .VRE
 
