@@ -102,8 +102,11 @@ export class SoftContainer {
 
             // build env with temp dir on path
             const env = { ...process.env };
-            if (lang === 'python' && fs.existsSync(this.tempDir)) {
-                env.PYTHONPATH = this.tempDir + (env.PYTHONPATH ? path.delimiter + env.PYTHONPATH : '');
+            if (lang === 'python') {
+                env.PYTHONIOENCODING = 'utf-8';
+                if (fs.existsSync(this.tempDir)) {
+                    env.PYTHONPATH = this.tempDir + (env.PYTHONPATH ? path.delimiter + env.PYTHONPATH : '');
+                }
             }
             if (lang === 'node' && fs.existsSync(path.join(this.tempDir, 'node_modules'))) {
                 env.NODE_PATH = path.join(this.tempDir, 'node_modules') + (env.NODE_PATH ? path.delimiter + env.NODE_PATH : '');
