@@ -292,13 +292,16 @@ export function formatDeltaX(report: DeltaReport, snapshot: SystemSnapshot): str
     // System snapshot summary
     lines.push('SYSTEM SNAPSHOT:');
     lines.push(`  OS: ${snapshot.hardware.osVersion}`);
+    // Show all detected runtimes (universal — not locked to Python/Node)
     for (const rt of snapshot.runtimes) {
-        lines.push(`  ${rt.name}: ${rt.available ? rt.version : 'NOT FOUND'}`);
+        if (rt.available) {
+            lines.push(`  ${rt.name}: ${rt.version || 'found'}`);
+        }
     }
-    // Show key packages
-    const keyPackages = ['torch', 'tensorflow', 'numpy', 'pandas', 'flask', 'django', 'express', 'react'];
+    // Show packages that overlap with project requirements (domain-agnostic)
+    const requiredNames = new Set(report.satisfied.concat(report.missing, report.mismatched).map(i => i.name));
     for (const pkg of snapshot.packages) {
-        if (keyPackages.includes(pkg.name)) {
+        if (requiredNames.has(pkg.name)) {
             lines.push(`  ${pkg.name}: ${pkg.version}`);
         }
     }

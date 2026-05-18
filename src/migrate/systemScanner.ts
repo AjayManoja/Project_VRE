@@ -1,38 +1,16 @@
 /**
- * ═══════════════════════════════════════════════════════════════════
- *  System Scanner — Reads what's already installed on the host
- * ═══════════════════════════════════════════════════════════════════
+ * Universal System Scanner — Detects ALL installed runtimes & tools
  *
- *  PURPOSE:
- *    Queries the developer's machine to build a complete picture of
- *    what is already installed: language runtimes, pip/npm packages,
- *    system binaries, hardware specs. This snapshot is compared
- *    against project requirements by deltaEngine.ts.
- *
- *  OUTPUT:
- *    A SystemSnapshot object containing:
- *      - hardware: CPU, RAM, GPU info
- *      - runtimes: Python, Node versions
- *      - packages: All pip and npm installed packages
- *      - binaries: Whether system tools (ffmpeg, git, etc.) exist
- *
- *  USED BY:
- *    - src/migrate/index.ts     (orchestrates full scan)
- *    - src/migrate/deltaEngine.ts (comparison target)
- * ═══════════════════════════════════════════════════════════════════
+ * Scans for: Python, Node.js, Rust, Go, Java, .NET, Ruby, PHP,
+ *            Dart, Swift, Elixir, C/C++ toolchains, container runtimes,
+ *            databases, and common dev tools.
  */
 
 import { Logger } from '../utils/logger';
 import {
-    getSystemHardware,
-    getPythonVersion,
-    getNodeVersion,
-    getPipPackages,
-    getNpmPackages,
-    binaryExists,
-    getBinaryVersion,
-    InstalledPackage,
-    SystemHardware,
+    getSystemHardware, getPythonVersion, getNodeVersion,
+    getPipPackages, getNpmPackages, binaryExists, getBinaryVersion,
+    InstalledPackage, SystemHardware,
 } from '../utils/platform';
 
 const LOG_SOURCE = 'SystemScanner';
@@ -41,6 +19,7 @@ export interface RuntimeInfo {
     name: string;
     version: string | null;
     available: boolean;
+    category: 'language' | 'toolchain' | 'container' | 'database' | 'tool';
 }
 
 export interface BinaryInfo {
@@ -51,98 +30,126 @@ export interface BinaryInfo {
 }
 
 export interface SystemSnapshot {
-    /** Timestamp of when the scan was performed */
     scannedAt: string;
-    /** Hardware information */
     hardware: SystemHardware;
-    /** Language runtimes */
     runtimes: RuntimeInfo[];
-    /** Installed packages (pip + npm) */
     packages: InstalledPackage[];
-    /** System binaries */
     binaries: BinaryInfo[];
+    detectedLanguages: string[];
 }
 
-/** Common system binaries to check for */
-const COMMON_BINARIES = [
-    'git', 'ffmpeg', 'docker', 'curl', 'wget',
-    'gcc', 'g++', 'make', 'cmake',
-    'java', 'rustc', 'cargo', 'go',
+/** All runtimes/tools to scan — organized by category */
+const RUNTIME_CHECKS: Array<{ name: string; category: RuntimeInfo['category']; versionCmd?: string }> = [
+    // Languages
+    { name: 'python', category: 'language' },
+    { name: 'node', category: 'language' },
+    { name: 'rustc', category: 'language' },
+    { name: 'go', category: 'language' },
+    { name: 'java', category: 'language' },
+    { name: 'dotnet', category: 'language' },
+    { name: 'ruby', category: 'language' },
+    { name: 'php', category: 'language' },
+    { name: 'dart', category: 'language' },
+    { name: 'swift', category: 'language' },
+    { name: 'elixir', category: 'language' },
+    { name: 'perl', category: 'language' },
+    { name: 'lua', category: 'language' },
+    // Toolchains & package managers
+    { name: 'cargo', category: 'toolchain' },
+    { name: 'npm', category: 'toolchain' },
+    { name: 'yarn', category: 'toolchain' },
+    { name: 'pnpm', category: 'toolchain' },
+    { name: 'pip', category: 'toolchain' },
+    { name: 'composer', category: 'toolchain' },
+    { name: 'gem', category: 'toolchain' },
+    { name: 'gradle', category: 'toolchain' },
+    { name: 'maven', category: 'toolchain', versionCmd: 'mvn' },
+    { name: 'cmake', category: 'toolchain' },
+    { name: 'make', category: 'toolchain' },
+    { name: 'gcc', category: 'toolchain' },
+    { name: 'g++', category: 'toolchain' },
+    { name: 'clang', category: 'toolchain' },
+    // Containers
+    { name: 'docker', category: 'container' },
+    { name: 'podman', category: 'container' },
+    { name: 'kubectl', category: 'container' },
+    // Databases
+    { name: 'psql', category: 'database' },
+    { name: 'mysql', category: 'database' },
+    { name: 'sqlite3', category: 'database' },
+    { name: 'redis-cli', category: 'database' },
+    { name: 'mongosh', category: 'database' },
+    // Dev tools
+    { name: 'git', category: 'tool' },
+    { name: 'curl', category: 'tool' },
+    { name: 'wget', category: 'tool' },
+    { name: 'ffmpeg', category: 'tool' },
+    { name: 'terraform', category: 'tool' },
 ];
 
-/**
- * Perform a complete system scan.
- * Collects hardware info, installed runtimes, packages, and binaries.
- */
 export function scanSystem(): SystemSnapshot {
     const logger = Logger.getInstance();
-    logger.info(LOG_SOURCE, 'Starting full system scan...');
+    logger.info(LOG_SOURCE, 'Starting universal system scan...');
 
-    // 1. Hardware
     const hardware = getSystemHardware();
     logger.info(LOG_SOURCE, `Hardware: ${hardware.cpuCores} cores, ${hardware.totalRamGb}GB RAM, GPU: ${hardware.gpu || 'None'}`);
 
-    // 2. Runtimes
+    // Scan all runtimes
     const runtimes: RuntimeInfo[] = [];
+    const detectedLanguages: string[] = [];
 
-    const pythonVer = getPythonVersion();
-    runtimes.push({
-        name: 'python',
-        version: pythonVer,
-        available: pythonVer !== null,
-    });
+    for (const check of RUNTIME_CHECKS) {
+        const binName = check.versionCmd || check.name;
+        let version: string | null = null;
 
-    const nodeVer = getNodeVersion();
-    runtimes.push({
-        name: 'node',
-        version: nodeVer,
-        available: nodeVer !== null,
-    });
+        // Special cases for version detection
+        if (check.name === 'python') {
+            version = getPythonVersion();
+        } else if (check.name === 'node') {
+            version = getNodeVersion();
+        } else {
+            version = getBinaryVersion(binName);
+        }
 
-    logger.info(LOG_SOURCE, `Runtimes: Python ${pythonVer || 'NOT FOUND'}, Node ${nodeVer || 'NOT FOUND'}`);
+        const available = version !== null || binaryExists(binName) !== null;
 
-    // 3. Packages
+        runtimes.push({ name: check.name, version, available, category: check.category });
+
+        if (available && check.category === 'language') {
+            detectedLanguages.push(check.name);
+        }
+    }
+
+    const foundRuntimes = runtimes.filter(r => r.available);
+    logger.info(LOG_SOURCE, `Found ${foundRuntimes.length} runtimes/tools`);
+    logger.info(LOG_SOURCE, `Languages: ${detectedLanguages.join(', ') || 'none'}`);
+
+    // Scan packages
     const pipPackages = getPipPackages();
     const npmPackages = getNpmPackages();
     const allPackages = [...pipPackages, ...npmPackages];
     logger.info(LOG_SOURCE, `Packages: ${pipPackages.length} pip, ${npmPackages.length} npm`);
 
-    // 4. System binaries
-    const binaries: BinaryInfo[] = [];
-    for (const bin of COMMON_BINARIES) {
-        const binPath = binaryExists(bin);
-        const version = binPath ? getBinaryVersion(bin) : null;
-        binaries.push({
-            name: bin,
-            path: binPath,
-            version,
-            available: binPath !== null,
-        });
-    }
-    const foundBinaries = binaries.filter(b => b.available).map(b => b.name);
-    logger.info(LOG_SOURCE, `Binaries found: ${foundBinaries.join(', ') || 'none'}`);
+    // Backwards-compatible binaries array
+    const binaries: BinaryInfo[] = runtimes
+        .filter(r => r.category === 'tool')
+        .map(r => ({ name: r.name, path: r.available ? r.name : null, version: r.version, available: r.available }));
 
     const snapshot: SystemSnapshot = {
         scannedAt: new Date().toISOString(),
-        hardware,
-        runtimes,
-        packages: allPackages,
-        binaries,
+        hardware, runtimes, packages: allPackages, binaries, detectedLanguages,
     };
 
-    logger.info(LOG_SOURCE, '✅ System scan complete');
+    logger.info(LOG_SOURCE, '✅ Universal system scan complete');
     return snapshot;
 }
 
-/**
- * Format a SystemSnapshot as a human-readable text file
- * (written to .migrate/system.snapshot).
- */
+/** Format snapshot as human-readable text */
 export function formatSnapshotText(snapshot: SystemSnapshot): string {
     const lines: string[] = [];
 
     lines.push('═══════════════════════════════════════════════════════');
-    lines.push('  SYSTEM SNAPSHOT — What this machine already has');
+    lines.push('  SYSTEM SNAPSHOT — Universal Environment Inventory');
     lines.push(`  Scanned: ${snapshot.scannedAt}`);
     lines.push('═══════════════════════════════════════════════════════');
     lines.push('');
@@ -158,45 +165,43 @@ export function formatSnapshotText(snapshot: SystemSnapshot): string {
         lines.push(`  GPU        : ${snapshot.hardware.gpu}`);
         lines.push(`  VRAM Total : ${snapshot.hardware.totalVramGb} GB`);
         lines.push(`  VRAM Free  : ${snapshot.hardware.freeVramGb} GB`);
-    } else {
-        lines.push('  GPU        : None detected');
-    }
+    } else { lines.push('  GPU        : None detected'); }
     lines.push('');
 
-    // Runtimes
-    lines.push('RUNTIMES:');
-    for (const rt of snapshot.runtimes) {
-        const status = rt.available ? `✅ ${rt.version}` : '❌ NOT FOUND';
-        lines.push(`  ${rt.name.padEnd(12)} = ${status}`);
-    }
-    lines.push('');
+    // Runtimes by category
+    const categories: Array<{ label: string; key: RuntimeInfo['category'] }> = [
+        { label: 'LANGUAGES', key: 'language' },
+        { label: 'TOOLCHAINS & PACKAGE MANAGERS', key: 'toolchain' },
+        { label: 'CONTAINERS', key: 'container' },
+        { label: 'DATABASES', key: 'database' },
+        { label: 'DEV TOOLS', key: 'tool' },
+    ];
 
-    // Installed packages
+    for (const cat of categories) {
+        const items = snapshot.runtimes.filter(r => r.category === cat.key);
+        const found = items.filter(r => r.available);
+        if (found.length === 0) { continue; }
+        lines.push(`${cat.label}:`);
+        for (const rt of found) {
+            lines.push(`  ${rt.name.padEnd(14)} = ✅ ${rt.version || 'found'}`);
+        }
+        lines.push('');
+    }
+
+    // Packages
     lines.push(`INSTALLED PACKAGES (${snapshot.packages.length} total):`);
-    const pipPkgs = snapshot.packages.filter(p => p.source === 'pip');
-    const npmPkgs = snapshot.packages.filter(p => p.source === 'npm');
-
-    if (pipPkgs.length > 0) {
-        lines.push('  [pip]:');
-        for (const p of pipPkgs) {
+    const bySource = new Map<string, InstalledPackage[]>();
+    for (const p of snapshot.packages) {
+        const arr = bySource.get(p.source) || [];
+        arr.push(p);
+        bySource.set(p.source, arr);
+    }
+    for (const [source, pkgs] of bySource) {
+        lines.push(`  [${source}] (${pkgs.length}):`);
+        for (const p of pkgs.slice(0, 50)) { // Cap at 50 per source for readability
             lines.push(`    ${p.name.padEnd(30)} = ${p.version}`);
         }
-    }
-    if (npmPkgs.length > 0) {
-        lines.push('  [npm]:');
-        for (const p of npmPkgs) {
-            lines.push(`    ${p.name.padEnd(30)} = ${p.version}`);
-        }
-    }
-    lines.push('');
-
-    // Binaries
-    lines.push('SYSTEM BINARIES:');
-    for (const bin of snapshot.binaries) {
-        const status = bin.available
-            ? `✅ ${bin.version || 'found'}`
-            : '❌ NOT FOUND';
-        lines.push(`  ${bin.name.padEnd(12)} = ${status}`);
+        if (pkgs.length > 50) { lines.push(`    ... and ${pkgs.length - 50} more`); }
     }
 
     return lines.join('\n');
