@@ -23,5 +23,10 @@ export class StatusBar {
         this.items[0].text = on ? '$(pulse) Monitoring...' : '$(pulse) VRE';
     }
 
+    setAligned(lang: string | null): void {
+        this.items[0].text = lang ? `$(check) VRE [Aligned: ${lang}]` : '$(pulse) VRE';
+        this.items[0].tooltip = lang ? `VRE pre-aligned terminal environment to: ${lang}` : 'VRE + Around';
+    }
+
     dispose(): void { this.items.forEach(i => i.dispose()); }
 }
