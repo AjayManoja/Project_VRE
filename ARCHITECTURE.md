@@ -15,22 +15,25 @@ User presses Ctrl+Shift+R                     │
    .VRE reads delta.X ───────────────────> soft container
        │                                      │
        ├── installs missing deps (temporary) ──┤
-       ├── translates resource params ─────────┤
        │                                      │
        ▼                                      ▼
-   proxy code runs inside container     .monitor watches
+   Gemini AI Orchestrator 
+       ├── Translates resource parameters
+       └── Injects Dynamic Step-Capping (Early Loop Exits)
+       │
+       ▼
+   proxy runs inside container ─────────> .monitor watches
        │                                      │
+       ├── Real-time process logging          │
        ├── exit 0 → "logic clean"              │
-       │                                      │
-       ├── Cat 2 → "real bug, line X"          │
-       │                                      │
+       ├── Cat 2 → "real bug"                 │
        └── Cat 1 → "hardware limit"     leak detection
                                               │
                                               ▼
-                                    AI-ready crash report
+                                     Gemini-Enriched AI Report
        │
        ▼
-   container cleans up — system unchanged
+   container cleans up (try...finally guarantee)
 ```
 
 ## Layer 1: .migrate
@@ -111,9 +114,10 @@ src/
 ├── commands.ts         5 command implementations
 ├── utils/
 │   ├── logger.ts       Output channel logger
-│   └── platform.ts     OS detection, shell commands, hardware info
+│   ├── platform.ts     OS detection, shell commands, hardware info
+│   └── ai.ts           Gemini Flash 2.5 API integration engine
 ├── migrate/
-│   ├── scanner.ts      12 ecosystem parsers
+│   ├── scanner.ts      12 ecosystem parsers + dynamic code import scanner
 │   ├── system.ts       System inventory
 │   ├── delta.ts        Gap comparison + report
 │   ├── installer.ts    Missing dep installer
@@ -121,8 +125,8 @@ src/
 ├── vre/
 │   ├── translator.ts   Parameter scaling
 │   ├── classifier.ts   Error classification
-│   ├── container.ts    Soft container
-│   └── index.ts        Pipeline orchestrator
+│   ├── container.ts    Soft container + real-time output streams
+│   └── index.ts        Pipeline orchestrator (try...finally cleanup)
 ├── monitor/
 │   └── watcher.ts      Hardware sampler + leak detector
 └── ui/

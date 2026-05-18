@@ -16,25 +16,35 @@ VRE fixes all three problems.
 
 ## How It Works
 
-**Three layers, one pipeline:**
+**Three layers, one AI-orchestrated pipeline:**
 
 ```
 .migrate ──→ .VRE ──→ .monitor
  (scan)    (container)  (watch)
+   │            │           │
+   └────────────┴───────────┘
+                ▼
+      Gemini AI Orchestrator
 ```
 
-**`.migrate`** runs silently when you open a project. It reads whatever dependency file your project uses (requirements.txt, package.json, Cargo.toml, go.mod, and 8 more), checks what's actually installed on your system, and produces **delta.X** — a structured gap report. Paste this into any AI chat and the AI instantly knows your exact environment. No more 2-hour explanation sessions.
+**`.migrate`** runs silently when you open a project. It scans manifests (12 language ecosystems) and **dynamically parses your source code imports** (Dynamic Import Alignment) to detect undeclared dependencies. If manifests like `requirements.txt` or `package.json` are missing, VRE **automatically generates** them. It produces **delta.X** — a structured gap report. 
 
-**`.VRE`** creates a **soft container** when you press `Ctrl+Shift+R`. It reads delta.X, installs only what's missing into a temporary isolated scope, scales down resource-heavy parameters (thread counts, batch sizes, connection pools — not just ML stuff), runs the code, and cleans up after. Your system is exactly as it was before. If the code crashes, VRE tells you whether it's a real bug (Category 2 — will crash on any machine) or just a hardware limit (Category 1 — would work on a bigger machine).
+**`.VRE`** creates a **soft container** when you press `Ctrl+Shift+R`. It reads delta.X, installs missing libraries into an ephemeral sandbox, and uses **Gemini 2.5 Flash** to:
+1. Scale down resource parameters (batch size, thread counts).
+2. **Inject Dynamic Step-Capping (Early Exits)**: Parses heavy scripts (like LLM or ML training) to intercept loops (e.g. `for batch_idx in enumerate`) and break after 5-10 iterations. This guarantees massive models validate locally in **< 10 seconds** instead of running forever!
+It executes the code with strict environment overrides and performs a guaranteed `try...finally` sandbox directory cleanup.
 
-**`.monitor`** watches hardware while code runs. If RAM or VRAM spikes past safe limits, it catches it, stops the process, and writes an AI-ready crash report with exact specs, memory trends, and suggested fix directions. You paste this report and the AI can fix it on the first try.
+**`.monitor`** watches hardware metrics in real-time. If a crash or leak occurs, the Gemini AI Orchestrator ingests the traceback, stack, and hardware logs to output an **AI-ready, high-precision self-healing instruction report** (`vre.crash.report`) for your chat assistant.
 
 ## Quick Start
 
-1. Open a project — `.migrate` scans automatically, delta.X appears in `.migrate/`
-2. Open a `.py` or `.js` file, press `Ctrl+Shift+R` — VRE translates, containers, runs, reports
-3. If something's missing, VRE asks: "Install now? [Yes] [No]"
-4. Check the report in `.VRE/` — logic bugs or hardware limits, clearly separated
+1. Create a `.env` file in your project root with your Gemini API Key:
+   ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
+   ```
+2. Open a project — `.migrate` scans automatically, auto-generates manifests if missing, and writes delta.X.
+3. Press `Ctrl+Shift+R` on a `.py` or `.js` file — VRE translates, caps training loops dynamically via Gemini, runs inside the sandbox, and opens the real-time log.
+4. If a crash occurs, copy the Gemini-enriched report in `.VRE/` and paste it into your AI assistant for a one-shot fix.
 
 ## Keyboard Shortcuts
 

@@ -60,34 +60,27 @@ Paste this into any AI chat. One paste. The AI knows everything.
 
 1. **Saves** the file if you have unsaved changes.
 
-2. **Auto-scans** if no delta exists yet (you don't need to run scan first).
+2. **Auto-scans** if no delta exists yet (dynamic scanner maps imports and builds your `requirements.txt`/`package.json` dynamically).
 
-3. **Translates** — scans the code for resource-heavy parameters:
-   ```python
-   # Your code              # Proxy version
-   batch_size = 256         batch_size = 4
-   num_workers = 16         num_workers = 2
-   pool_size = 100          pool_size = 5
-   max_retries = 50         max_retries = 3
-   ```
-   Logic is identical. Only resource numbers change.
+3. **Translates & Optimizes (Gemini AI Layer):** 
+   - Scales resource parameters inside memory:
+     ```python
+     # Your code              # Proxy version
+     batch_size = 256         batch_size = 4
+     num_workers = 16         num_workers = 2
+     ```
+   - **Dynamic Step-Capping (Loop Interceptor):** Gemini Flash reads your script. If it detects heavy loops (like dataset generators, model epochs, or massive network request arrays), it dynamically injects early loop exits into the copy in memory (e.g. `if batch_idx >= 5: break`). This guarantees your massive model successfully executes its forward/backward/optimize steps inside a few seconds instead of running for hours locally!
 
-4. **Builds soft container** — reads delta.X, sees what's missing:
-   - If torch is missing: `pip install --target .VRE/.container_tmp torch`
-   - Sets `PYTHONPATH` to include the temp directory
-   - Your system Python doesn't change. No global installs.
+4. **Builds soft container** — reads delta.X, sees what's missing, downloads them to an isolated `.VRE/.container_tmp/` directory, and maps env variables.
 
-5. **Runs the proxy** inside the container as a child process with a 30-minute timeout.
+5. **Runs the proxy** with real-time logs. The `VRE + Around` Output channel instantly reveals itself, showing your print statements, downloads, and progress bar in real-time.
 
 6. **Classifies the result:**
+   - **Success:** ✅ Code is logic-clean. 
+   - **Category 2 (logic bug):** 🚨 Logic bug detected. Gemini outputs high-precision line mappings to the original file.
+   - **Category 1 (hardware limit):** ⚠️ Hardware limit. Gemini outputs a self-healing crash report instructing your chat assistant how to optimize.
 
-   **If it succeeds:** "✅ Code is logic-clean." The algorithms work correctly at any scale.
-
-   **If Category 2 (logic bug):** "🚨 Logic bug: ZeroDivisionError at line 47." Opens the error report showing the exact line in your original file and the full stack trace. This error would crash on any machine — fix it before deploying.
-
-   **If Category 1 (hardware limit):** "⚠️ Hardware limit: CUDA out of memory." Writes an AI-ready crash report to `.VRE/vre.crash.report` with system specs, crash location, and suggested fix direction.
-
-7. **Cleans up** — deletes the temp directory. System returns to its original state. No leftover packages, no pollution.
+7. **Cleans up (try...finally guarantee):** Deletes the temporary directories completely, reclaiming all local storage even if the script crashed or was cancelled mid-run.
 
 ---
 
