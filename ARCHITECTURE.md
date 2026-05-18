@@ -81,7 +81,7 @@ The execution engine. Translates code, sets up a soft container, runs the proxy,
 
 ## Layer 3: .monitor
 
-Watches hardware while code runs. Detects leaks. Can inform crash reports.
+Runs automatically on launch to continuously track host hardware metrics. It reads the local connection configuration `.VRE/config.json` inside the user's workspace; if `"monitor": false` is present, it suspends itself completely.
 
 **Files:**
 - `src/monitor/watcher.ts` — timer-based sampler (CPU, RAM, GPU, VRAM), linear regression leak detector, event emitter
@@ -90,19 +90,28 @@ Watches hardware while code runs. Detects leaks. Can inform crash reports.
 
 ## UI
 
-- `src/ui/statusbar.ts` — live CPU/RAM/GPU in the editor footer
+- `src/ui/statusbar.ts` — live CPU/RAM/GPU/VRAM and active alignment tracking in the editor footer
 
 ## Commands
 
-Five commands total. That's it.
+Three core user-facing commands are exposed in the extension manifest.
 
 | Command | What It Does |
 |---------|-------------|
 | `vre.scanDependencies` | Run .migrate manually (also runs on project open) |
 | `vre.translateAndRun` | Full pipeline: translate → container → run → report |
-| `vre.startMonitor` | Start hardware polling |
-| `vre.stopMonitor` | Stop hardware polling |
 | `vre.viewDelta` | Open delta.X in the editor |
+
+## Command Line Interface (CLI)
+
+The CLI architecture consists of auto-generated lightweight shell wrappers placed in `.VRE/bin/`. When a VS Code terminal activates, `.VRE/bin/` is dynamically prepended to `PATH`. 
+
+* **Wrapper Scripts:** `vre.cmd` (Windows PowerShell/CMD) and `vre` (Unix Bash/zsh) pass flags to Node.js which directly signals the background extension host to trigger:
+  * **`vre run`**: Triggers full soft-container compilation/run, printing step-by-step diagnostic actions transparently in real-time.
+  * **`vre scan`**: Triggers migration analysis.
+  * **`vre monitor`**: Initiates direct active hardware sampling in the terminal interface.
+* **Conditional Telemetry Lifecycle:** Telemetry is fully disabled by default. If a user sets `"monitor": true` in `.VRE/config.json`, the background monitor is automatically run *prior* to executing the sandboxed script.
+* **Benefits:** Transparent command execution directly in standard developer shell interfaces with zero external npm or binary compilation requirements.
 
 ## Security
 

@@ -24,17 +24,24 @@ export class Logger {
         return Logger.inst;
     }
 
+    public listener: ((msg: string) => void) | null = null;
+
     log(level: Level, src: string, msg: string): void {
         if (level < this.min) return;
         const ts = new Date().toISOString();
-        this.ch.appendLine(`[${ts}] [${NAMES[level]}] [${src}] ${msg}`);
+        const formatted = `[${ts}] [${NAMES[level]}] [${src}] ${msg}\n`;
+        this.ch.append(formatted);
+        if (this.listener) this.listener(formatted);
     }
 
     debug(src: string, msg: string): void { this.log(Level.DEBUG, src, msg); }
     info(src: string, msg: string): void { this.log(Level.INFO, src, msg); }
     warn(src: string, msg: string): void { this.log(Level.WARN, src, msg); }
     error(src: string, msg: string): void { this.log(Level.ERROR, src, msg); }
-    raw(msg: string): void { this.ch.append(msg); }
+    raw(msg: string): void {
+        this.ch.append(msg);
+        if (this.listener) this.listener(msg);
+    }
     show(): void { this.ch.show(true); }
 
     dispose(): void {

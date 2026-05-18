@@ -68,6 +68,23 @@ export function registerCommands(
                         await runMigrate(root);
                     }
 
+                    const configPath = path.join(root, '.VRE', 'config.json');
+                    let autoMonitor = false;
+                    try {
+                        if (fs.existsSync(configPath)) {
+                            const conf = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+                            if (conf.monitor === true) autoMonitor = true;
+                        }
+                    } catch (e) {}
+
+                    if (autoMonitor && !monitor.running) {
+                        log.info(LOG, 'Auto-monitor enabled via config. Starting telemetry...');
+                        monitor.start();
+                        statusBar.setMonitoring(true);
+                        monitor.on('sample', s => statusBar.update(s));
+                        monitor.on('leak', w => vscode.window.showWarningMessage(`VRE: ${w.metric} leak detected (+${w.ratePerSample}GB/sample)`));
+                    }
+
                     const report = await runVRE(fp, root);
 
                     if (report.logicClean) {

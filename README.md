@@ -34,11 +34,11 @@ VRE fixes all three problems.
 2. **Inject Dynamic Step-Capping (Early Exits)**: Parses heavy scripts (like LLM or ML training) to intercept loops (e.g. `for batch_idx in enumerate`) and break after 5-10 iterations. This guarantees massive models validate locally in **< 10 seconds** instead of running forever!
 It executes the code with strict environment overrides and performs a guaranteed `try...finally` sandbox directory cleanup.
 
-**`.monitor`** watches hardware metrics in real-time. If a crash or leak occurs, the Gemini AI Orchestrator ingests the traceback, stack, and hardware logs to output an **AI-ready, high-precision self-healing instruction report** (`vre.crash.report`) for your chat assistant.
-
-**`Editor Workspace Pre-Alignment`** automatically updates your `.vscode/settings.json` and prepends the satisfied interpreter paths to VS Code's active terminal `PATH` context when a code file is active.
+**`.monitor`** runs automatically in the background on startup, tracking CPU, RAM, GPU, and VRAM every 5 seconds. If a memory leak or crash occurs, the Gemini AI Orchestrator compiles your hardware stats, stack trace, and active settings to write a self-healing diagnostic report (`vre.crash.report`).
 
 **`Dynamic Terminal Alignment & Automatic Cleanup`** ensures that your VS Code terminal automatically uses the correct pre-verified environment (Python, Node, etc.) while editing the corresponding file. The moment you close the file, VRE immediately clears the env overrides and **automatically closes/disposes of the active VRE terminal session** to keep your workspace perfectly clean.
+
+**`Decoupled Local Configuration`** gives you simple control over the system. If you want to disable the automatic hardware monitor, you do not need to run commands. Simply create or edit the local `.VRE/config.json` configuration file in your project root and set `"monitor": false`.
 
 ## Quick Start
 
@@ -46,11 +46,28 @@ It executes the code with strict environment overrides and performs a guaranteed
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
    ```
-2. Open a project — `.migrate` scans automatically, auto-generates manifests if missing, and writes delta.X. It also aligns your editor's `settings.json` path.
+2. Open a project — `.migrate` scans automatically, auto-generates manifests if missing, writes delta.X, and starts the background performance monitor automatically.
 3. Open any `.py` or `.js` file — VRE dynamically aligns your terminal's environment. The status bar will show `VRE [Aligned: Python]`.
 4. Press `Ctrl+Shift+R` to run VRE validation (which finishes inside 3 seconds using the Gemini dynamic step-capper).
 5. Open a terminal and run your full script safely using the aligned terminal environment with zero conflicts!
 6. Close the file tab when done — VRE immediately clears environment changes and terminates the aligned terminal session automatically!
+
+## Command Line Interface (CLI)
+
+In addition to editor shortcuts, VRE dynamically injects a lightweight, local Command Line Interface directly into your active VS Code terminal sessions. You can run commands natively from your terminal prompt:
+
+* **`vre activate`** — Explicitly initializes and activates the aligned environment, setting up the `.VRE/` workspace starting directory.
+* **`vre run <file_path>`** — Translates and executes the specified script inside the isolated soft container. Rather than a black-box execution, VRE prints **every action step-by-step in real-time** (dependency analysis, Gemini parameter capping adjustments, sandbox allocation, and sandbox reclamation).
+* **`vre scan`** — Triggers the `.migrate` scanner to check dependencies, map imports, and refresh `delta.X` instantly.
+* **`vre monitor`** — Activates VRE's hardware telemetry directly in the terminal. It prints a continuous performance log:
+  ```bash
+  [VRE Monitoring] Active on: C:\Users\User\Project_VRE_Env
+  > Run your heavy model script now! Sampling CPU, RAM, GPU, VRAM...
+  ```
+
+### Lifecycle Telemetry Controls
+* **Default Off:** By default, hardware monitoring is completely disabled to save local system resources (`"monitor": false`).
+* **Auto-Trigger on Run:** If `"monitor": true` is explicitly configured in your local `.VRE/config.json`, then **whenever you execute a script via VRE, the telemetry monitor automatically boots up first in the background**, logging system resources in real-time alongside your code run!
 
 ## Keyboard Shortcuts
 

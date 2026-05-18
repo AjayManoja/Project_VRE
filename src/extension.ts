@@ -6,6 +6,7 @@ import { StatusBar } from './ui/status_bar';
 import { registerCommands } from './commands';
 import { getExecutableAbsolutePath } from './utils/platform';
 import * as path from 'path';
+import { CLIServer } from './cli/server';
 
 const LOG = 'Extension';
 
@@ -26,6 +27,10 @@ export function activate(context: vscode.ExtensionContext): void {
     // create UI
     statusBar = new StatusBar();
     monitor = new Monitor();
+    
+    // start CLI IPC Server
+    const cliServer = new CLIServer(root, monitor);
+    cliServer.start();
 
     // register commands
     const cmds = registerCommands(context, root, monitor, statusBar);
@@ -36,33 +41,37 @@ export function activate(context: vscode.ExtensionContext): void {
 
     // Helper to align environment context
     async function alignEnvironment(editor: vscode.TextEditor | undefined) {
-        if (!editor) {
-            context.environmentVariableCollection.clear();
-            statusBar?.setAligned(null);
-            return;
-        }
-
-        const fp = editor.document.uri.fsPath;
-        const ext = path.extname(fp).toLowerCase();
-        if (ext !== '.py' && ext !== '.js') {
-            context.environmentVariableCollection.clear();
-            statusBar?.setAligned(null);
-            return;
-        }
-
-        const binName = ext === '.py' ? 'python' : 'node';
-        const absPath = getExecutableAbsolutePath(binName);
-        if (!absPath) return;
-
-        const dir = path.dirname(absPath);
         const pathSep = process.platform === 'win32' ? ';' : ':';
+        const cliBin = path.join(root, '.VRE', 'bin');
+        let runtimeDir = '';
+
+        const fp = editor?.document.uri.fsPath;
+        if (fp) {
+            const ext = path.extname(fp).toLowerCase();
+            if (ext === '.py' || ext === '.js') {
+                const binName = ext === '.py' ? 'python' : 'node';
+                const absPath = getExecutableAbsolutePath(binName);
+                if (absPath) {
+                    runtimeDir = path.dirname(absPath);
+                    const langLabel = ext === '.py' ? 'Python' : 'Node';
+                    statusBar?.setAligned(langLabel);
+                    log.info(LOG, `Workspace terminal environment pre-aligned to ${langLabel}: ${absPath}`);
+                    
+                    if (ext === '.py') {
+                        // Align Pylance static analysis
+                        vscode.workspace.getConfiguration('python').update('defaultInterpreterPath', absPath, vscode.ConfigurationTarget.Workspace).then(undefined, e => log.warn(LOG, 'Failed to update python path'));
+                    }
+                }
+            } else {
+                statusBar?.setAligned(null);
+            }
+        } else {
+            statusBar?.setAligned(null);
+        }
 
         context.environmentVariableCollection.clear();
-        context.environmentVariableCollection.prepend('PATH', dir + pathSep);
-        
-        const langLabel = ext === '.py' ? 'Python' : 'Node';
-        statusBar?.setAligned(langLabel);
-        log.info(LOG, `Workspace terminal environment pre-aligned to ${langLabel}: ${absPath}`);
+        const finalPath = runtimeDir ? runtimeDir + pathSep + cliBin + pathSep : cliBin + pathSep;
+        context.environmentVariableCollection.prepend('PATH', finalPath);
     }
 
     // Align on active editor change
@@ -90,9 +99,8 @@ export function activate(context: vscode.ExtensionContext): void {
         if (ext === '.py' || ext === '.js') {
             log.info(LOG, `File closed: ${path.basename(fp)}. Reverting environment and terminating aligned terminals.`);
             
-            // Clear dynamic PATH overrides
-            context.environmentVariableCollection.clear();
-            statusBar?.setAligned(null);
+            // Clear dynamic PATH overrides, but keep CLI available!
+            alignEnvironment(vscode.window.activeTextEditor);
 
             // Terminate the terminal session associated with this file
             const term = vreTerminals.get(fp);
@@ -111,21 +119,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // Trigger alignment check for current open editor
     alignEnvironment(vscode.window.activeTextEditor);
 
-    context.subscriptions.push({ dispose: () => { monitor?.dispose(); statusBar?.dispose(); log.dispose(); } });
-
-    // auto-scan on open — run .migrate silently in background
-    runMigrate(root).then(result => {
-        log.info(LOG, `Auto-scan: ${result.delta.satisfied.length} ok, ${result.delta.missing.length} missing`);
-        if (result.delta.missing.length > 0) {
-            const names = result.delta.missing.slice(0, 5).map(i => i.name).join(', ');
-            const more = result.delta.missing.length > 5 ? ` +${result.delta.missing.length - 5} more` : '';
-            vscode.window.showInformationMessage(`VRE: Missing deps detected: ${names}${more}`, 'View delta.X').then(action => {
-                if (action) vscode.commands.executeCommand('vre.viewDelta');
-            });
-        }
-    }).catch(err => {
-        log.warn(LOG, `Auto-scan failed: ${err}`);
-    });
+    context.subscriptions.push({ dispose: () => { monitor?.dispose(); statusBar?.dispose(); cliServer.dispose(); log.dispose(); } });
 
     log.info(LOG, 'VRE activated');
 }

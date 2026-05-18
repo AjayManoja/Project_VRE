@@ -104,6 +104,7 @@ export class SoftContainer {
             const env = { ...process.env };
             if (lang === 'python') {
                 env.PYTHONIOENCODING = 'utf-8';
+                env.PYTHONUNBUFFERED = '1';
                 if (fs.existsSync(this.tempDir)) {
                     env.PYTHONPATH = this.tempDir + (env.PYTHONPATH ? path.delimiter + env.PYTHONPATH : '');
                 }

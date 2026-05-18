@@ -163,13 +163,16 @@ THIS IS NOT A CODE BUG. Logic is intact. Optimize resource usage.
 
 ## Monitor
 
-**Start:** Run "VRE: Start Monitor" from the command palette.
+**Default Behavior:** Completely disabled by default (`"monitor": false` or config file absent) to preserve local system resources. VRE runs completely silently without tracking host hardware.
 
-**What it does:** Polls CPU, RAM, GPU, VRAM every 5 seconds. Shows live numbers in the status bar. Runs linear regression on memory samples — if RAM or VRAM keeps climbing, fires a leak warning.
-
-**Stop:** Run "VRE: Stop Monitor."
-
-The monitor runs independently. You can have it on while you code, scan, or run proxies.
+**Opt-In via Configuration:** 
+If you want automatic hardware tracking during code runs, create or edit the `.VRE/config.json` configuration file inside your project root and set `"monitor": true`:
+```json
+{
+  "monitor": true
+}
+```
+* **Auto-Launch Lifecycle:** When `"monitor": true` is enabled, VRE **automatically starts the background telemetry monitor first** the moment you run a script, and then immediately launches your model execution. This ensures seamless memory leak detection during hot training runs without wasting resources when idle.
 
 ---
 
@@ -185,3 +188,22 @@ Missing: torch, redis. Install now?
 If you say yes, VRE installs them globally (pip/npm). If they're from other ecosystems (cargo, go, gem), VRE tells you to install manually.
 
 The soft container handles temporary installs during execution. This prompt is for permanent installs if you want them.
+
+---
+
+## Command Line Interface (CLI)
+
+For developers who prefer terminal-centric workflows, VRE dynamically binds a lightweight CLI inside active workspace terminals:
+
+1. **How it works:** When a terminal is spawned, VRE dynamically maps its internal script directory to the terminal session `PATH`.
+2. **`vre activate`:** Explicitly initializes the aligned environment, creates the starting folder structure (`.VRE/`), and sets up a default `.VRE/config.json`.
+3. **`vre run <file_path>`:** Executes the script inside the soft container. Rather than acting as a silent "black box," the CLI prints **every action step-by-step in real-time** (dependency scraping, Gemini loop-capping scaling, container sandbox preparation, execution outputs, and temporary sandbox reclamation).
+4. **`vre scan`:** Instructs `.migrate` to scan for packages, match code imports dynamically, and rewrite `delta.X` instantly.
+5. **`vre monitor`:** Launches VRE's telemetry monitor directly in your active terminal session. It prints:
+   ```bash
+   [VRE Monitoring] Active on: C:\Users\User\Project_VRE_Env
+   > Run your heavy model script now! Sampling CPU, RAM, GPU, VRAM...
+   ```
+   This allows you to leave this terminal active to track hardware leaks while you compile or run your script in another terminal.
+
+This provides complete command-line control over all VRE capabilities with zero local setup!
