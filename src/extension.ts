@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { Logger } from './utils/logger';
 import { runMigrate } from './migrate/index';
 import { Monitor } from './monitor/watcher';
-import { StatusBar } from './ui/statusbar';
+import { StatusBar } from './ui/status_bar';
 import { registerCommands } from './commands';
 
 const LOG = 'Extension';

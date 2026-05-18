@@ -5,7 +5,7 @@ import { runMigrate } from './migrate/index';
 import { promptAndInstall } from './migrate/installer';
 import { runVRE } from './vre/index';
 import { Monitor } from './monitor/watcher';
-import { StatusBar } from './ui/statusbar';
+import { StatusBar } from './ui/status_bar';
 import { Logger } from './utils/logger';
 
 const LOG = 'Commands';
