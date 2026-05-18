@@ -1,260 +1,127 @@
-/**
- * Platform — Async OS introspection with proper error boundaries
- */
-
-import { exec } from 'child_process';
-import { execSync } from 'child_process';
+import { exec, execSync } from 'child_process';
 import * as os from 'os';
 import { promisify } from 'util';
 
-const execAsync = promisify(exec);
-const EXEC_TIMEOUT = 15000;
+const run = promisify(exec);
+const TIMEOUT = 15_000;
 
 export type OSType = 'windows' | 'linux' | 'macos' | 'unknown';
 
-export interface SystemHardware {
-    os: string;
+export interface HardwareInfo {
+    os: OSType;
     osVersion: string;
-    cpuModel: string;
-    cpuCores: number;
-    totalRamGb: number;
-    freeRamGb: number;
+    cpu: string;
+    cores: number;
+    ramTotalGb: number;
+    ramFreeGb: number;
     gpu: string | null;
-    totalVramGb: number | null;
-    freeVramGb: number | null;
+    vramTotalGb: number | null;
+    vramFreeGb: number | null;
 }
 
-export interface InstalledPackage {
+export interface PackageEntry {
     name: string;
     version: string;
-    source: 'pip' | 'npm' | 'system';
+    source: 'pip' | 'npm';
 }
 
-/** Sync exec — used only in non-blocking contexts (init-time) */
-export function execSafe(command: string): string | null {
-    try {
-        return execSync(command, {
-            encoding: 'utf-8',
-            timeout: EXEC_TIMEOUT,
-            stdio: ['pipe', 'pipe', 'pipe'],
-            windowsHide: true,
-        }).trim();
-    } catch {
-        return null;
-    }
-}
-
-/** Async exec — preferred for all runtime operations */
-export async function execSafeAsync(command: string): Promise<string | null> {
-    try {
-        const { stdout } = await execAsync(command, {
-            timeout: EXEC_TIMEOUT,
-            windowsHide: true,
-            maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-        });
-        return stdout.trim();
-    } catch {
-        return null;
-    }
-}
-
-export function getOSType(): OSType {
+export function getOS(): OSType {
     const p = os.platform();
-    if (p === 'win32') { return 'windows'; }
-    if (p === 'linux') { return 'linux'; }
-    if (p === 'darwin') { return 'macos'; }
+    if (p === 'win32') return 'windows';
+    if (p === 'linux') return 'linux';
+    if (p === 'darwin') return 'macos';
     return 'unknown';
 }
 
-export function getOSVersion(): string {
-    const t = getOSType();
-    if (t === 'windows') { return execSafe('ver') || `Windows ${os.release()}`; }
-    if (t === 'linux') {
-        return execSafe('cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\"') || `Linux ${os.release()}`;
-    }
-    if (t === 'macos') { return `macOS ${execSafe('sw_vers -productVersion') || os.release()}`; }
-    return os.release();
+function execSafe(cmd: string): string | null {
+    try {
+        return execSync(cmd, { encoding: 'utf-8', timeout: TIMEOUT, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true }).trim();
+    } catch { return null; }
 }
 
-export function getSystemHardware(): SystemHardware {
-    const cpus = os.cpus();
-    let gpu: string | null = null;
-    let totalVram: number | null = null;
-    let freeVram: number | null = null;
+export async function execAsync(cmd: string): Promise<string | null> {
+    try {
+        const { stdout } = await run(cmd, { timeout: TIMEOUT, windowsHide: true, maxBuffer: 10 * 1024 * 1024 });
+        return stdout.trim();
+    } catch { return null; }
+}
 
-    const q = execSafe('nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader,nounits');
-    if (q) {
-        const p = q.split(',').map(s => s.trim());
-        if (p.length >= 3) {
-            gpu = p[0];
-            totalVram = Math.round(parseInt(p[1]) / 1024 * 10) / 10;
-            freeVram = Math.round(parseInt(p[2]) / 1024 * 10) / 10;
+export function getHardware(): HardwareInfo {
+    const cpus = os.cpus();
+    const osType = getOS();
+
+    let osVersion = os.release();
+    if (osType === 'windows') osVersion = execSafe('ver') || `Windows ${os.release()}`;
+    else if (osType === 'macos') osVersion = `macOS ${execSafe('sw_vers -productVersion') || os.release()}`;
+    else if (osType === 'linux') osVersion = execSafe('cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d \\"') || `Linux ${os.release()}`;
+
+    let gpu: string | null = null;
+    let vramTotal: number | null = null;
+    let vramFree: number | null = null;
+    const nv = execSafe('nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader,nounits');
+    if (nv) {
+        const parts = nv.split(',').map(s => s.trim());
+        if (parts.length >= 3) {
+            gpu = parts[0];
+            vramTotal = Math.round(parseInt(parts[1]) / 1024 * 10) / 10;
+            vramFree = Math.round(parseInt(parts[2]) / 1024 * 10) / 10;
         }
     }
 
     return {
-        os: getOSType(),
-        osVersion: getOSVersion(),
-        cpuModel: cpus.length > 0 ? cpus[0].model : 'Unknown',
-        cpuCores: cpus.length,
-        totalRamGb: Math.round(os.totalmem() / (1024 ** 3) * 10) / 10,
-        freeRamGb: Math.round(os.freemem() / (1024 ** 3) * 10) / 10,
-        gpu, totalVramGb: totalVram, freeVramGb: freeVram,
+        os: osType, osVersion,
+        cpu: cpus[0]?.model || 'Unknown',
+        cores: cpus.length,
+        ramTotalGb: Math.round(os.totalmem() / (1024 ** 3) * 10) / 10,
+        ramFreeGb: Math.round(os.freemem() / (1024 ** 3) * 10) / 10,
+        gpu, vramTotalGb: vramTotal, vramFreeGb: vramFree,
     };
 }
 
-/** Async version for runtime use */
-export async function getSystemHardwareAsync(): Promise<SystemHardware> {
-    const cpus = os.cpus();
-    let gpu: string | null = null;
-    let totalVram: number | null = null;
-    let freeVram: number | null = null;
-
-    const q = await execSafeAsync('nvidia-smi --query-gpu=name,memory.total,memory.free --format=csv,noheader,nounits');
-    if (q) {
-        const p = q.split(',').map(s => s.trim());
-        if (p.length >= 3) {
-            gpu = p[0];
-            totalVram = Math.round(parseInt(p[1]) / 1024 * 10) / 10;
-            freeVram = Math.round(parseInt(p[2]) / 1024 * 10) / 10;
-        }
-    }
-
-    return {
-        os: getOSType(),
-        osVersion: getOSVersion(),
-        cpuModel: cpus.length > 0 ? cpus[0].model : 'Unknown',
-        cpuCores: cpus.length,
-        totalRamGb: Math.round(os.totalmem() / (1024 ** 3) * 10) / 10,
-        freeRamGb: Math.round(os.freemem() / (1024 ** 3) * 10) / 10,
-        gpu, totalVramGb: totalVram, freeVramGb: freeVram,
-    };
-}
-
-export function getPythonVersion(): string | null {
-    return execSafe('python --version')?.replace('Python ', '')
-        || execSafe('python3 --version')?.replace('Python ', '')
-        || null;
-}
-
-export function getNodeVersion(): string | null {
-    const v = execSafe('node --version');
-    return v ? v.replace('v', '') : null;
-}
-
-export async function getPipPackagesAsync(): Promise<InstalledPackage[]> {
-    const output = await execSafeAsync('pip list --format=json')
-        || await execSafeAsync('python -m pip list --format=json')
-        || await execSafeAsync('python3 -m pip list --format=json');
-    if (!output) { return []; }
-    try {
-        const parsed = JSON.parse(output) as Array<{ name: string; version: string }>;
-        return parsed.map(p => ({ name: p.name.toLowerCase(), version: p.version, source: 'pip' as const }));
-    } catch { return []; }
-}
-
-export function getPipPackages(): InstalledPackage[] {
-    const output = execSafe('pip list --format=json')
-        || execSafe('python -m pip list --format=json')
-        || execSafe('python3 -m pip list --format=json');
-    if (!output) { return []; }
-    try {
-        const parsed = JSON.parse(output) as Array<{ name: string; version: string }>;
-        return parsed.map(p => ({ name: p.name.toLowerCase(), version: p.version, source: 'pip' as const }));
-    } catch { return []; }
-}
-
-export async function getNpmPackagesAsync(): Promise<InstalledPackage[]> {
-    const output = await execSafeAsync('npm list -g --json --depth=0');
-    if (!output) { return []; }
-    try {
-        const parsed = JSON.parse(output);
-        const deps = parsed.dependencies || {};
-        return Object.entries(deps).map(([name, info]) => ({
-            name,
-            version: (info as { version?: string }).version || 'unknown',
-            source: 'npm' as const,
-        }));
-    } catch { return []; }
-}
-
-export function getNpmPackages(): InstalledPackage[] {
-    const output = execSafe('npm list -g --json --depth=0');
-    if (!output) { return []; }
-    try {
-        const parsed = JSON.parse(output);
-        const deps = parsed.dependencies || {};
-        return Object.entries(deps).map(([name, info]) => ({
-            name,
-            version: (info as { version?: string }).version || 'unknown',
-            source: 'npm' as const,
-        }));
-    } catch { return []; }
-}
-
-export function binaryExists(name: string): string | null {
-    const cmd = getOSType() === 'windows' ? `where ${name}` : `which ${name}`;
-    return execSafe(cmd);
-}
-
-export function getBinaryVersion(name: string): string | null {
-    const output = execSafe(`${name} --version`) || execSafe(`${name} -v`);
-    if (!output) { return null; }
-    const match = output.match(/(\d+\.\d+(?:\.\d+)?)/);
-    return match ? match[1] : output.split('\n')[0];
-}
-
-export function getCpuUsagePercent(): number {
+export function getCpuPercent(): number {
     const cpus = os.cpus();
     let idle = 0, total = 0;
-    for (const cpu of cpus) {
-        const t = cpu.times;
+    for (const c of cpus) {
+        const t = c.times;
         total += t.user + t.nice + t.sys + t.idle + t.irq;
         idle += t.idle;
     }
     return Math.round((1 - idle / total) * 100);
 }
 
-export function getGpuMetrics(): { utilizationPercent: number; vramUsedGb: number; vramTotalGb: number } | null {
-    const output = execSafe('nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits');
-    if (!output) { return null; }
-    const p = output.split(',').map(s => s.trim());
-    if (p.length < 3) { return null; }
-    return {
-        utilizationPercent: parseInt(p[0]) || 0,
-        vramUsedGb: Math.round(parseInt(p[1]) / 1024 * 100) / 100,
-        vramTotalGb: Math.round(parseInt(p[2]) / 1024 * 100) / 100,
-    };
+export function getGpuUsage(): { percent: number; usedGb: number; totalGb: number } | null {
+    const out = execSafe('nvidia-smi --query-gpu=utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits');
+    if (!out) return null;
+    const p = out.split(',').map(s => s.trim());
+    if (p.length < 3) return null;
+    return { percent: parseInt(p[0]) || 0, usedGb: Math.round(parseInt(p[1]) / 1024 * 100) / 100, totalGb: Math.round(parseInt(p[2]) / 1024 * 100) / 100 };
 }
 
-export function getTopProcesses(count: number = 5): Array<{ name: string; cpu: number; memory: number }> {
-    const t = getOSType();
-    let output: string | null = null;
-
-    if (t === 'windows') {
-        output = execSafe(
-            `powershell -Command "Get-Process | Sort-Object CPU -Descending | Select-Object -First ${count} ProcessName,@{N='CPU';E={[math]::Round($_.CPU,1)}},@{N='Mem';E={[math]::Round($_.WorkingSet64/1MB,1)}} | ConvertTo-Json"`
-        );
-    } else {
-        output = execSafe(`ps aux --sort=-%cpu | head -${count + 1} | tail -${count} | awk '{print $11","$3","$4}'`);
-    }
-
-    if (!output) { return []; }
-
+export async function getPipPackages(): Promise<PackageEntry[]> {
+    const out = await execAsync('pip list --format=json') || await execAsync('python -m pip list --format=json');
+    if (!out) return [];
     try {
-        if (t === 'windows') {
-            const parsed = JSON.parse(output);
-            const arr = Array.isArray(parsed) ? parsed : [parsed];
-            return arr.map((p: { ProcessName: string; CPU: number; Mem: number }) => ({
-                name: p.ProcessName || 'unknown',
-                cpu: p.CPU || 0,
-                memory: p.Mem || 0,
-            }));
-        } else {
-            return output.split('\n').filter(Boolean).map(line => {
-                const parts = line.split(',');
-                return { name: parts[0] || 'unknown', cpu: parseFloat(parts[1]) || 0, memory: parseFloat(parts[2]) || 0 };
-            });
-        }
+        return (JSON.parse(out) as Array<{ name: string; version: string }>).map(p => ({ name: p.name.toLowerCase(), version: p.version, source: 'pip' as const }));
     } catch { return []; }
+}
+
+export async function getNpmPackages(): Promise<PackageEntry[]> {
+    const out = await execAsync('npm list -g --json --depth=0');
+    if (!out) return [];
+    try {
+        const deps = JSON.parse(out).dependencies || {};
+        return Object.entries(deps).map(([name, info]) => ({ name, version: (info as { version?: string }).version || 'unknown', source: 'npm' as const }));
+    } catch { return []; }
+}
+
+export function binaryVersion(name: string): string | null {
+    const out = execSafe(`${name} --version`) || execSafe(`${name} -v`);
+    if (!out) return null;
+    const m = out.match(/(\d+\.\d+(?:\.\d+)?)/);
+    return m ? m[1] : out.split('\n')[0];
+}
+
+export function binaryExists(name: string): boolean {
+    const cmd = getOS() === 'windows' ? `where ${name}` : `which ${name}`;
+    return execSafe(cmd) !== null;
 }

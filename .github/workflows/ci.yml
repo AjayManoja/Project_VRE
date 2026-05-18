@@ -27,41 +27,17 @@ jobs:
         run: npm ci
 
       - name: Type check
-        run: npm run check-types
+        run: npx tsc --noEmit
 
       - name: Lint
-        run: npm run lint
+        run: npx eslint src --ext ts
 
-      - name: Build production bundle
-        run: npm run package
+      - name: Build
+        run: node esbuild.mjs --production
 
-      - name: Upload artifact
+      - name: Upload bundle
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 20
         uses: actions/upload-artifact@v4
         with:
           name: extension-bundle
           path: out/extension.js
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: 'npm'
-
-      - run: npm ci
-      - run: npm run package
-
-      - name: Package VSIX
-        run: npx @vscode/vsce package --no-dependencies
-        
-      - name: Upload VSIX
-        uses: actions/upload-artifact@v4
-        with:
-          name: vre-around.vsix
-          path: '*.vsix'

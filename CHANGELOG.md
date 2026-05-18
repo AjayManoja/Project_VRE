@@ -1,25 +1,34 @@
 # Changelog
 
-All notable changes to the VRE + Around extension will be documented here.
+## 1.0.0 — 2026-05-18
 
-## [1.0.0] - 2026-05-18
+First public release.
 
-### Added
-- **Three-Layer Architecture**: `.monitor`, `.VRE`, `.migrate` folder structure
-- **Translation Engine**: Regex-based proxy code generation for Python and JavaScript
-- **Proxy Executor**: Child process execution with timeout enforcement and error classification
-- **Error Reporter**: Category 1 (hardware) vs Category 2 (logic) classification with line mapping
-- **Hardware Monitor**: Live CPU, RAM, GPU, VRAM polling with configurable intervals
-- **Leak Detector**: Linear regression-based memory leak detection with R² threshold
-- **Dependency Scanner**: Multi-format parsing (requirements.txt, package.json, setup.py, pyproject.toml)
-- **System Scanner**: Installed package, runtime, and binary inventory
-- **Delta Engine**: Semver-aware comparison producing `delta.X` LLM-friendly reports
-- **Dashboard**: Rich webview with live gauges, trend charts, alerts, and process monitoring
-- **Status Bar**: Live CPU/RAM/GPU metrics in VS Code footer
-- **Tree View**: Activity Bar sidebar with three-layer file explorer
-- **Keyboard Shortcuts**: `Ctrl+Shift+R` for translate & run, `Ctrl+Shift+D` for dashboard
-- **Context Menus**: Right-click translate & run on `.py` and `.js` files
-- **Export Report**: Consolidated environment report for sharing
-- **Auto-Scan**: Optional automatic dependency scan on workspace open
-- **Log Rotation**: Automatic rotation at configurable max file size
-- **CSP Security**: Content Security Policy with nonce-protected webview scripts
+### What's in this release
+
+**Core engine:**
+- Three-layer architecture: `.monitor`, `.VRE`, `.migrate`
+- Hardware monitor with CPU, RAM, GPU, VRAM tracking and memory leak detection
+- Code translation engine that scales resource-heavy parameters for safe local testing
+- Error classification system that separates hardware crashes from actual code bugs
+- Dependency scanner supporting 12 ecosystems (Python, Node, Rust, Go, Java, C#, Ruby, PHP, Dart, and more)
+- Universal system scanner detecting 35+ runtimes, toolchains, containers, databases, and dev tools
+- Semver-aware dependency comparison with gap reporting
+
+**Editor integration:**
+- 9 commands accessible from the command palette
+- Live dashboard with real-time gauges, trend charts, alerts, and process monitoring
+- Status bar indicators showing CPU/RAM/GPU usage
+- Sidebar tree view for browsing VRE data files
+- Right-click context menu for translate & run on .py and .js files
+- Keyboard shortcuts: Ctrl+Shift+R (translate & run), Ctrl+Shift+D (dashboard)
+
+**Build and tooling:**
+- esbuild bundler producing a single 60KB minified file
+- ESLint and Prettier configured
+- GitHub Actions CI pipeline with cross-platform testing
+- Content Security Policy with nonce-protected webview
+
+**Platform:**
+- Editor adapter layer for future multi-editor support
+- VS Code adapter (current) and CLI adapter (headless/CI) implemented

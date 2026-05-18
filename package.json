@@ -1,7 +1,7 @@
 {
   "name": "vre-around",
-  "displayName": "VRE + Around — AI Code Environment",
-  "description": "Makes your AI code editor aware of your real hardware — catches logic bugs locally, manages dependencies intelligently, and monitors resources in real-time before expensive remote compute is spent.",
+  "displayName": "VRE + Around",
+  "description": "Makes your code editor aware of your real hardware. Catches logic bugs locally, manages dependencies across machines, monitors resources in real-time.",
   "version": "1.0.0",
   "publisher": "AjayManoja",
   "author": {
@@ -18,42 +18,22 @@
   },
   "homepage": "https://github.com/AjayManoja/Project_VRE#readme",
   "icon": "assets/icon.png",
-  "galleryBanner": {
-    "color": "#0d1117",
-    "theme": "dark"
-  },
   "engines": {
     "vscode": "^1.85.0"
   },
   "categories": [
-    "Machine Learning",
     "Testing",
     "Debuggers",
     "Other"
   ],
   "keywords": [
     "VRE",
-    "virtual runtime",
-    "hardware monitor",
-    "dependency management",
-    "AI coding",
-    "GPU monitor",
-    "proxy testing",
-    "environment scanner",
-    "machine learning",
-    "VRAM"
-  ],
-  "badges": [
-    {
-      "url": "https://img.shields.io/github/license/AjayManoja/Project_VRE",
-      "href": "https://github.com/AjayManoja/Project_VRE/blob/main/LICENSE",
-      "description": "License"
-    },
-    {
-      "url": "https://img.shields.io/github/stars/AjayManoja/Project_VRE",
-      "href": "https://github.com/AjayManoja/Project_VRE",
-      "description": "GitHub Stars"
-    }
+    "environment",
+    "hardware",
+    "dependency",
+    "proxy",
+    "container",
+    "monitor"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -62,58 +42,29 @@
   "contributes": {
     "commands": [
       {
-        "command": "vre.initialize",
-        "title": "Initialize Project Environment",
-        "category": "VRE",
-        "icon": "$(rocket)"
-      },
-      {
         "command": "vre.scanDependencies",
-        "title": "Scan Dependencies & Compute Delta",
-        "category": "VRE",
-        "icon": "$(search)"
-      },
-      {
-        "command": "vre.startMonitor",
-        "title": "Start Hardware Monitor",
-        "category": "VRE",
-        "icon": "$(play)"
-      },
-      {
-        "command": "vre.stopMonitor",
-        "title": "Stop Hardware Monitor",
-        "category": "VRE",
-        "icon": "$(debug-stop)"
-      },
-      {
-        "command": "vre.showDashboard",
-        "title": "Open Dashboard",
-        "category": "VRE",
-        "icon": "$(dashboard)"
+        "title": "Scan Dependencies",
+        "category": "VRE"
       },
       {
         "command": "vre.translateAndRun",
-        "title": "Translate & Run Proxy",
-        "category": "VRE",
-        "icon": "$(run-all)"
+        "title": "Translate & Run",
+        "category": "VRE"
+      },
+      {
+        "command": "vre.startMonitor",
+        "title": "Start Monitor",
+        "category": "VRE"
+      },
+      {
+        "command": "vre.stopMonitor",
+        "title": "Stop Monitor",
+        "category": "VRE"
       },
       {
         "command": "vre.viewDelta",
-        "title": "View Delta.X Report",
-        "category": "VRE",
-        "icon": "$(diff)"
-      },
-      {
-        "command": "vre.refreshTree",
-        "title": "Refresh Explorer",
-        "category": "VRE",
-        "icon": "$(refresh)"
-      },
-      {
-        "command": "vre.exportReport",
-        "title": "Export Environment Report",
-        "category": "VRE",
-        "icon": "$(export)"
+        "title": "View Delta.X",
+        "category": "VRE"
       }
     ],
     "keybindings": [
@@ -122,187 +73,32 @@
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
         "when": "editorTextFocus && resourceExtname =~ /\\.(py|js)$/"
-      },
-      {
-        "command": "vre.showDashboard",
-        "key": "ctrl+shift+d",
-        "mac": "cmd+shift+d"
-      },
-      {
-        "command": "vre.scanDependencies",
-        "key": "ctrl+shift+s",
-        "mac": "cmd+shift+s",
-        "when": "!editorFocus"
-      }
-    ],
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "vre-explorer",
-          "title": "VRE Environment",
-          "icon": "$(server-environment)"
-        }
-      ]
-    },
-    "views": {
-      "vre-explorer": [
-        {
-          "id": "vreTreeView",
-          "name": "Environment Layers",
-          "icon": "$(layers)",
-          "contextualTitle": "VRE Environment Layers"
-        }
-      ]
-    },
-    "viewsWelcome": [
-      {
-        "view": "vreTreeView",
-        "contents": "No VRE environment detected.\n[Initialize VRE](command:vre.initialize)\nCreate the .monitor, .VRE, and .migrate folder structure."
       }
     ],
     "menus": {
-      "view/title": [
-        {
-          "command": "vre.refreshTree",
-          "when": "view == vreTreeView",
-          "group": "navigation@1"
-        },
-        {
-          "command": "vre.showDashboard",
-          "when": "view == vreTreeView",
-          "group": "navigation@2"
-        },
-        {
-          "command": "vre.initialize",
-          "when": "view == vreTreeView",
-          "group": "1_actions@1"
-        },
-        {
-          "command": "vre.scanDependencies",
-          "when": "view == vreTreeView",
-          "group": "1_actions@2"
-        }
-      ],
       "editor/context": [
         {
           "command": "vre.translateAndRun",
           "when": "resourceExtname =~ /\\.(py|js)$/",
           "group": "vre@1"
         }
-      ],
-      "editor/title": [
-        {
-          "command": "vre.translateAndRun",
-          "when": "resourceExtname =~ /\\.(py|js)$/",
-          "group": "navigation"
-        }
-      ],
-      "commandPalette": [
-        {
-          "command": "vre.translateAndRun",
-          "when": "editorIsOpen"
-        },
-        {
-          "command": "vre.stopMonitor",
-          "when": "vre:monitorRunning"
-        },
-        {
-          "command": "vre.startMonitor",
-          "when": "!vre:monitorRunning"
-        }
       ]
     },
     "configuration": {
       "title": "VRE + Around",
       "properties": {
-        "vre.container.cpuCores": {
-          "type": "number",
-          "default": 1,
-          "minimum": 1,
-          "maximum": 64,
-          "description": "Maximum CPU cores allocated for the VRE proxy container.",
-          "order": 1
-        },
-        "vre.container.ramLimitGb": {
-          "type": "number",
-          "default": 4,
-          "minimum": 1,
-          "maximum": 512,
-          "description": "Maximum RAM (GB) allocated for the VRE proxy container.",
-          "order": 2
-        },
-        "vre.container.vramLimitGb": {
-          "type": "number",
-          "default": 2,
-          "minimum": 0,
-          "maximum": 128,
-          "description": "Maximum VRAM (GB) allocated for the VRE proxy container. Set to 0 to disable GPU passthrough.",
-          "order": 3
-        },
-        "vre.container.maxRuntimeMinutes": {
-          "type": "number",
-          "default": 30,
-          "minimum": 1,
-          "maximum": 1440,
-          "description": "Maximum runtime (minutes) before the proxy process is automatically terminated.",
-          "order": 4
-        },
         "vre.monitor.intervalSeconds": {
           "type": "number",
           "default": 5,
           "minimum": 1,
           "maximum": 300,
-          "description": "Hardware monitor polling interval in seconds. Lower values give more granular data but use more CPU.",
-          "order": 5
-        },
-        "vre.monitor.leakThresholdMb": {
-          "type": "number",
-          "default": 100,
-          "minimum": 10,
-          "maximum": 10000,
-          "description": "RAM growth rate per polling interval (MB) that triggers a memory leak warning.",
-          "order": 6
-        },
-        "vre.monitor.vramAlertPercent": {
-          "type": "number",
-          "default": 90,
-          "minimum": 50,
-          "maximum": 100,
-          "description": "VRAM usage percentage that triggers a ceiling alert.",
-          "order": 7
-        },
-        "vre.telemetry.enabled": {
-          "type": "boolean",
-          "default": false,
-          "description": "Enable anonymous usage telemetry to help improve VRE. No personal data is collected.",
-          "order": 8
+          "description": "Hardware polling interval in seconds."
         },
         "vre.logging.level": {
           "type": "string",
           "default": "info",
           "enum": ["debug", "info", "warn", "error"],
-          "enumDescriptions": [
-            "Show all log messages including debug output",
-            "Show informational messages and above",
-            "Show only warnings and errors",
-            "Show only errors"
-          ],
-          "description": "Minimum log level for the VRE output channel.",
-          "order": 9
-        },
-        "vre.logging.maxFileSizeMb": {
-          "type": "number",
-          "default": 10,
-          "minimum": 1,
-          "maximum": 100,
-          "description": "Maximum size (MB) of runtime.log before automatic rotation.",
-          "order": 10
-        },
-        "vre.autoScanOnOpen": {
-          "type": "boolean",
-          "default": false,
-          "description": "Automatically run a dependency scan when a workspace is opened.",
-          "order": 11
+          "description": "Log verbosity."
         }
       }
     }
@@ -317,25 +113,18 @@
     "package": "npm run check-types && node esbuild.mjs --production",
     "lint": "eslint src --ext ts",
     "lint:fix": "eslint src --ext ts --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "test": "npm run compile && node ./out/test/runTest.js",
-    "pretest": "npm run compile"
+    "format": "prettier --write \"src/**/*.ts\""
   },
   "devDependencies": {
-    "@types/mocha": "^10.0.6",
     "@types/node": "^20.11.0",
-    "@types/sinon": "^17.0.3",
     "@types/vscode": "^1.85.0",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
-    "@vscode/test-electron": "^2.3.8",
     "@vscode/vsce": "^2.22.0",
     "esbuild": "^0.21.0",
     "eslint": "^8.56.0",
-    "mocha": "^10.3.0",
     "npm-run-all": "^4.1.5",
     "prettier": "^3.2.0",
-    "sinon": "^17.0.1",
     "typescript": "^5.3.0"
   }
 }

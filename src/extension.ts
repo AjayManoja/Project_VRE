@@ -1,120 +1,53 @@
-/**
- * Extension Entry Point — Production-grade lifecycle management
- */
-
 import * as vscode from 'vscode';
 import { Logger } from './utils/logger';
-import { initializeFolderStructure } from './utils/fileGenerator';
-import { HardwareMonitor } from './monitor/hardwareMonitor';
-import { VreStatusBar } from './ui/statusBar';
-import { VreTreeDataProvider } from './ui/treeDataProvider';
+import { runMigrate } from './migrate/index';
+import { Monitor } from './monitor/watcher';
+import { StatusBar } from './ui/statusbar';
 import { registerCommands } from './commands';
-import { runMigrateScan } from './migrate/index';
 
-const LOG_SOURCE = 'Extension';
-const EXTENSION_VERSION = '1.0.0';
+const LOG = 'Extension';
 
-/** Global disposable tracker */
-const disposables: vscode.Disposable[] = [];
-let monitor: HardwareMonitor | undefined;
-let statusBar: VreStatusBar | undefined;
-let treeProvider: VreTreeDataProvider | undefined;
+let monitor: Monitor | undefined;
+let statusBar: StatusBar | undefined;
 
 export function activate(context: vscode.ExtensionContext): void {
-    const logger = Logger.getInstance();
-
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders || workspaceFolders.length === 0) {
-        logger.warn(LOG_SOURCE, 'No workspace folder open — VRE extension inactive');
+    const log = Logger.get();
+    const folders = vscode.workspace.workspaceFolders;
+    if (!folders || folders.length === 0) {
+        log.warn(LOG, 'No workspace open — VRE inactive');
         return;
     }
 
-    const workspaceRoot = workspaceFolders[0].uri.fsPath;
-    logger.setWorkspaceRoot(workspaceRoot);
+    const root = folders[0].uri.fsPath;
+    log.info(LOG, `VRE activating in: ${root}`);
 
-    logger.info(LOG_SOURCE, `VRE + Around v${EXTENSION_VERSION} — Activating`);
-    logger.info(LOG_SOURCE, `Workspace: ${workspaceRoot}`);
+    // create UI
+    statusBar = new StatusBar();
+    monitor = new Monitor();
 
-    // Set context keys for command visibility
-    vscode.commands.executeCommand('setContext', 'vre:monitorRunning', false);
-    vscode.commands.executeCommand('setContext', 'vre:activated', true);
+    // register commands
+    const cmds = registerCommands(context, root, monitor, statusBar);
+    context.subscriptions.push(...cmds);
+    context.subscriptions.push({ dispose: () => { monitor?.dispose(); statusBar?.dispose(); log.dispose(); } });
 
-    // Idempotent folder structure
-    try {
-        initializeFolderStructure(workspaceRoot);
-    } catch (err) {
-        logger.error(LOG_SOURCE, `Folder init failed: ${err}`);
-    }
-
-    // UI components
-    statusBar = new VreStatusBar();
-    treeProvider = new VreTreeDataProvider(workspaceRoot);
-    monitor = new HardwareMonitor(workspaceRoot);
-
-    // Tree view
-    const treeView = vscode.window.createTreeView('vreTreeView', {
-        treeDataProvider: treeProvider,
-        showCollapseAll: true,
-    });
-
-    // Commands
-    const commandDisposables = registerCommands(context, workspaceRoot, monitor, statusBar, treeProvider);
-
-    // File watcher — debounced refresh
-    const watcher = vscode.workspace.createFileSystemWatcher(
-        new vscode.RelativePattern(workspaceRoot, '{.monitor,.VRE,.migrate}/**')
-    );
-    let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
-    const debouncedRefresh = () => {
-        if (refreshTimeout) { clearTimeout(refreshTimeout); }
-        refreshTimeout = setTimeout(() => treeProvider?.refresh(), 300);
-    };
-    watcher.onDidChange(debouncedRefresh);
-    watcher.onDidCreate(debouncedRefresh);
-    watcher.onDidDelete(debouncedRefresh);
-
-    // Config change listener
-    const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('vre')) {
-            logger.info(LOG_SOURCE, 'Configuration changed — reloading');
+    // auto-scan on open — run .migrate silently in background
+    runMigrate(root).then(result => {
+        log.info(LOG, `Auto-scan: ${result.delta.satisfied.length} ok, ${result.delta.missing.length} missing`);
+        if (result.delta.missing.length > 0) {
+            const names = result.delta.missing.slice(0, 5).map(i => i.name).join(', ');
+            const more = result.delta.missing.length > 5 ? ` +${result.delta.missing.length - 5} more` : '';
+            vscode.window.showInformationMessage(`VRE: Missing deps detected: ${names}${more}`, 'View delta.X').then(action => {
+                if (action) vscode.commands.executeCommand('vre.viewDelta');
+            });
         }
+    }).catch(err => {
+        log.warn(LOG, `Auto-scan failed: ${err}`);
     });
 
-    // Register all disposables
-    disposables.push(treeView, watcher, configWatcher, ...commandDisposables);
-    context.subscriptions.push(...disposables);
-
-    // Auto-scan on open (if enabled)
-    const config = vscode.workspace.getConfiguration('vre');
-    if (config.get<boolean>('autoScanOnOpen', false)) {
-        logger.info(LOG_SOURCE, 'Auto-scan enabled — running initial dependency scan');
-        runMigrateScan(workspaceRoot).catch(err => {
-            logger.warn(LOG_SOURCE, `Auto-scan failed: ${err}`);
-        });
-    }
-
-    logger.info(LOG_SOURCE, '✅ VRE + Around activated successfully');
+    log.info(LOG, 'VRE activated');
 }
 
 export function deactivate(): void {
-    try {
-        const logger = Logger.getInstance();
-        logger.info(LOG_SOURCE, 'VRE + Around — Deactivating');
-
-        vscode.commands.executeCommand('setContext', 'vre:activated', false);
-        vscode.commands.executeCommand('setContext', 'vre:monitorRunning', false);
-
-        monitor?.dispose();
-        statusBar?.dispose();
-        treeProvider?.dispose();
-
-        for (const d of disposables) {
-            try { d.dispose(); } catch { /* skip individual disposal failures */ }
-        }
-        disposables.length = 0;
-
-        logger.dispose();
-    } catch {
-        // Never throw during deactivation
-    }
+    monitor?.dispose();
+    statusBar?.dispose();
 }
