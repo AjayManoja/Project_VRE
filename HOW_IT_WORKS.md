@@ -82,9 +82,11 @@ Paste this into any AI chat. One paste. The AI knows everything.
    - **Category 2 (logic bug):** 🚨 Logic bug detected. Gemini outputs high-precision line mappings to the original file.
    - **Category 1 (hardware limit):** ⚠️ Hardware limit. Gemini outputs a self-healing crash report instructing your chat assistant how to optimize.
 
-7. **Unified 1-Click Local Execution:** If the result is a success, Arjun can click **`Run Full Script Locally`**. VRE spawns an integrated terminal and executes the original script using the absolute verified path to the satisfied interpreter (e.g. `"C:\Program Files\Python311\python.exe"`), completely bypassing any shell-level PATH mismatches or version conflicts!
+7. **Dynamic File-Scoped Environment Pre-Alignment:** When Arjun opens/focuses a `.py` or `.js` file, VRE dynamically prepends the pre-verified absolute binary interpreter directory to the VS Code terminal `PATH` environment variable. The status bar immediately updates to show `VRE [Aligned: Python]` or `VRE [Aligned: Node]`. Typing standard commands (like `python` or `node`) in any newly opened terminal resolves instantly to the pre-verified version.
 
-8. **Cleans up (try...finally guarantee):** Deletes the temporary directories completely, reclaiming all local storage even if the script crashed or was cancelled mid-run.
+8. **Automatic Workspace Cleanup:** When Arjun closes the active file, VRE immediately catches the closure event, clears the environment variable collection completely (reverting paths to default), and **automatically terminates/removes any active VRE terminals** opened during that editing session to ensure a clean, process-free workspace!
+
+9. **Cleans up (try...finally guarantee):** Deletes the temporary directories completely, reclaiming all local storage even if the script crashed or was cancelled mid-run.
 
 ---
 

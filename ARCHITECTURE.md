@@ -19,9 +19,8 @@ User presses Ctrl+Shift+R                     │
        ▼                                      ▼
    Gemini AI Orchestrator 
        ├── Translates resource parameters
-       └── Injects Dynamic Step-Capping (Early Loop Exits)
-       │
-       ▼
+        │
+        ▼
     proxy runs inside container ─────────> .monitor watches
         │                                      │
         ├── Real-time process logging          │
@@ -33,9 +32,9 @@ User presses Ctrl+Shift+R                     │
                                       Gemini-Enriched AI Report
         │
         ▼
-    1-Click Unified Local Execution
-        ├── Absolute verified binary path mapping
-        └── Mismatch-free terminal execution
+    Dynamic File-Scoped Environment Pre-Alignment
+        ├── PATH context prepending via environmentVariableCollection
+        └── Active editor change / closed lifecycle management
         │
         ▼
     container cleans up (try...finally guarantee)
@@ -52,7 +51,7 @@ Reads dependency manifests. Scans the system. Compares. Writes delta.X.
 - `src/migrate/installer.ts` — installs missing pip/npm packages with user permission
 - `src/migrate/index.ts` — orchestrator (scan project → scan system → compute delta → write files → auto-align VS Code settings)
 
-**Key behavior:** Runs automatically on project open. No user action needed. delta.X is produced before the user does anything. It dynamically aligning VS Code's editor environment path with `.vscode/settings.json` pointing to the exact machine binary found.
+**Key behavior:** Runs automatically on project open. It dynamically prepends the pre-verified absolute binary interpreter directory to the VS Code terminal `PATH` environment variable whenever a supported code file is focused. When the file tab is closed, it immediately resets environment modifications and cleanly disposes of any VRE-spawned terminal sessions.
 
 ## Layer 2: .VRE
 
