@@ -10,6 +10,7 @@ import { SoftContainer, ContainerResult } from './container';
 import { Delta } from '../migrate/delta';
 import { Logger } from '../utils/logger';
 import { getHardware } from '../utils/platform';
+import { getGeminiKey, optimizeWithGemini, generateCrashDiagnosis } from '../utils/ai';
 
 const LOG = 'VRE';
 
@@ -45,8 +46,15 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
     const code = fs.readFileSync(sourceFile, 'utf-8');
 
     // 2. translate
-    const { translated, translations } = translate(code, ext);
+    let { translated, translations } = translate(code, ext);
     log.info(LOG, `${translations.length} parameters translated`);
+
+    // 2.5. AI step-capping optimization
+    const apiKey = getGeminiKey(root);
+    if (apiKey) {
+        log.info(LOG, 'Gemini AI Orchestrator active. Injecting dynamic step-capping...');
+        translated = await optimizeWithGemini(translated, ext, apiKey);
+    }
 
     // 3. add header
     const proxyCode = addHeader(translated, sourceFile, translations.length, ext);
@@ -77,15 +85,25 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
     // 6. execute inside container
     const timeoutMs = 30 * 60 * 1000; // 30 min default
     log.show();
-    const result = await container.execute(proxyPath, lang, timeoutMs);
-
-    // 7. cleanup container
-    container.cleanup();
+    
+    let result: ContainerResult;
+    try {
+        result = await container.execute(proxyPath, lang, timeoutMs);
+    } finally {
+        // 7. cleanup container (guaranteed)
+        container.cleanup();
+    }
 
     // 8. map error line back to original
     let originalLine: number | null = null;
     if (result.error && result.error.parsed.line !== null) {
         originalLine = Math.max(1, result.error.parsed.line - HEADER_LINES);
+    }
+
+    let aiDiagnosis = '';
+    if (result.error && apiKey) {
+        log.info(LOG, 'Generating AI Crash Diagnostics...');
+        aiDiagnosis = await generateCrashDiagnosis(result.stderr, translated, ext, apiKey);
     }
 
     // 9. write error report if Category 2
@@ -94,6 +112,7 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
             generatedAt: new Date().toISOString(),
             category: 2,
             categoryNote: result.error.classification.note,
+            aiDiagnosis: aiDiagnosis || undefined,
             errorType: result.error.parsed.type,
             message: result.error.parsed.message,
             sourceFile: path.basename(sourceFile),
@@ -105,13 +124,15 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
         };
         fs.writeFileSync(path.join(vreDir, 'vre.error.report.json'), JSON.stringify(report, null, 2), 'utf-8');
         log.error(LOG, `Category 2 bug at line ${originalLine}: ${result.error.parsed.type}`);
+        if (aiDiagnosis) log.warn(LOG, `AI Diagnosis: ${aiDiagnosis}`);
     }
 
     // 10. write AI-ready report if Category 1
     if (result.error && result.error.classification.category === 1) {
-        const aiReport = formatCat1Report(result, hw, sourceFile, translations);
+        const aiReport = formatCat1Report(result, hw, sourceFile, translations, aiDiagnosis);
         fs.writeFileSync(path.join(vreDir, 'vre.crash.report'), aiReport, 'utf-8');
         log.warn(LOG, `Category 1 hardware limit — AI report written`);
+        if (aiDiagnosis) log.warn(LOG, `AI Diagnosis: ${aiDiagnosis}`);
     }
 
     if (result.success) {
@@ -128,7 +149,7 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
     };
 }
 
-function formatCat1Report(result: ContainerResult, hw: ReturnType<typeof getHardware>, sourceFile: string, translations: Translation[]): string {
+function formatCat1Report(result: ContainerResult, hw: ReturnType<typeof getHardware>, sourceFile: string, translations: Translation[], aiDiagnosis: string = ''): string {
     const e = result.error!;
     const l: string[] = [];
 
@@ -156,6 +177,12 @@ function formatCat1Report(result: ContainerResult, hw: ReturnType<typeof getHard
         for (const t of translations) {
             l.push(`  ${t.param}: ${t.original} → ${t.proxy} (${t.reason})`);
         }
+    }
+
+    if (aiDiagnosis) {
+        l.push('');
+        l.push('VRE AI DIAGNOSIS:');
+        l.push(aiDiagnosis);
     }
 
     l.push('');

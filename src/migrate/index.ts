@@ -9,6 +9,7 @@ import { scanProject } from './scanner';
 import { scanSystem, formatSnapshot, SystemSnapshot } from './system';
 import { computeDelta, formatDeltaX, Delta } from './delta';
 import { Logger } from '../utils/logger';
+import { getGeminiKey, generateEnvGuideline } from '../utils/ai';
 
 const LOG = 'Migrate';
 
@@ -39,10 +40,23 @@ export async function runMigrate(root: string): Promise<MigrateResult> {
     log.info(LOG, `Delta: ${delta.satisfied.length} ok, ${delta.missing.length} missing, ${delta.mismatched.length} mismatch`);
 
     // 4. write files
-    fs.writeFileSync(path.join(dir, 'delta.X'), formatDeltaX(delta, snapshot), 'utf-8');
+    const deltaXStr = formatDeltaX(delta, snapshot);
+    fs.writeFileSync(path.join(dir, 'delta.X'), deltaXStr, 'utf-8');
     fs.writeFileSync(path.join(dir, 'system.snapshot'), formatSnapshot(snapshot), 'utf-8');
     fs.writeFileSync(path.join(dir, 'delta.json'), JSON.stringify(delta, null, 2), 'utf-8');
 
     log.info(LOG, 'delta.X written');
+
+    // 5. AI Environment Guideline
+    const apiKey = getGeminiKey(root);
+    if (apiKey) {
+        log.info(LOG, 'Generating AI Environment Guideline...');
+        const guideline = await generateEnvGuideline(deltaXStr, apiKey);
+        if (guideline) {
+            fs.writeFileSync(path.join(dir, 'ai.guideline.txt'), guideline, 'utf-8');
+            log.info(LOG, `AI Guideline created in .migrate/ai.guideline.txt`);
+        }
+    }
+
     return { delta, snapshot, ecosystems };
 }
