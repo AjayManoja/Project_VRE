@@ -76,6 +76,7 @@ export async function runVRE(sourceFile: string, root: string): Promise<VRERepor
 
     // 6. execute inside container
     const timeoutMs = 30 * 60 * 1000; // 30 min default
+    log.show();
     const result = await container.execute(proxyPath, lang, timeoutMs);
 
     // 7. cleanup container

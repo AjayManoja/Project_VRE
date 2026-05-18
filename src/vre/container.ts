@@ -125,8 +125,16 @@ export class SoftContainer {
                 this.log.warn(LOG, 'Execution timed out');
             }, timeoutMs);
 
-            child.stdout?.on('data', (d: Buffer) => { stdout += d.toString(); });
-            child.stderr?.on('data', (d: Buffer) => { stderr += d.toString(); });
+            child.stdout?.on('data', (d: Buffer) => {
+                const s = d.toString();
+                stdout += s;
+                this.log.raw(s);
+            });
+            child.stderr?.on('data', (d: Buffer) => {
+                const s = d.toString();
+                stderr += s;
+                this.log.raw(s);
+            });
 
             child.on('close', (code: number | null) => {
                 clearTimeout(timer);

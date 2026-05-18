@@ -34,6 +34,7 @@ export class Logger {
     info(src: string, msg: string): void { this.log(Level.INFO, src, msg); }
     warn(src: string, msg: string): void { this.log(Level.WARN, src, msg); }
     error(src: string, msg: string): void { this.log(Level.ERROR, src, msg); }
+    raw(msg: string): void { this.ch.append(msg); }
     show(): void { this.ch.show(true); }
 
     dispose(): void {
